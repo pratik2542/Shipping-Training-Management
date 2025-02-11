@@ -31,23 +31,26 @@ const Login = () => {
 
   const sendAdminNotification = async (userData) => {
     try {
-      const response = await fetch(getApiUrl('/api/notify-admin'), {
+      console.log('Sending notification to:', getApiUrl('/notify-admin'));
+      const response = await fetch(getApiUrl('/notify-admin'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(userData),
-        credentials: 'include'
+        body: JSON.stringify(userData)
       });
 
+      const data = await response.json();
+      console.log('Server response:', data);
+
       if (!response.ok) {
-        throw new Error('Failed to send admin notification');
+        throw new Error(data.error || 'Failed to send notification');
       }
 
-      console.log('Admin notification sent successfully');
+      return data;
     } catch (error) {
-      console.error('Error sending admin notification:', error);
-      // Don't throw error to prevent blocking registration
+      console.error('Detailed error:', error);
+      throw error; // Re-throw to handle in handleRegister
     }
   };
 
@@ -79,18 +82,19 @@ const Login = () => {
         isTestUser: false
       };
 
-      // Create user request in Firebase
-      await addDoc(collection(db, 'userRequests'), userRequest);
-      
-      // Send notification to admin via local server
+      // Try to send notification first
       await sendAdminNotification(userRequest);
+      
+      // Only add to Firebase if notification succeeds
+      await addDoc(collection(db, 'userRequests'), userRequest);
 
-      alert('Your registration request has been submitted. You will receive an email once approved.');
+      alert('Registration request submitted successfully.');
       navigate('/pending-status', { state: { email } });
       
     } catch (error) {
-      console.error('Registration error:', error);
-      setError(error.message);
+      console.error('Registration failed:', error);
+      setError(`Registration failed: ${error.message}`);
+      alert('Failed to submit registration. Please try again.');
     } finally {
       setIsSubmitting(false); // End loading
     }

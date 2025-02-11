@@ -1,22 +1,37 @@
 const express = require('express');
 const cors = require('cors');
 const nodemailer = require('nodemailer');
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
+
+// Add immediate check for environment variables
+if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS || !process.env.ADMIN_EMAIL) {
+  console.error('Missing required environment variables!');
+  console.log('Current environment:', {
+    EMAIL_USER: process.env.EMAIL_USER,
+    EMAIL_PASS: process.env.EMAIL_PASS?.slice(0, 4) + '...',
+    ADMIN_EMAIL: process.env.ADMIN_EMAIL
+  });
+  process.exit(1);
+}
 
 const app = express();
+
+// Update CORS to be more permissive in development
 app.use(cors({
-  origin: ['http://localhost:3000', 'https://shipping-management.vercel.app'],
-  credentials: true
+  origin: '*',
+  methods: ['GET', 'POST', 'OPTIONS']
 }));
 app.use(express.json());
 
-// Add a test route
+// Test route to verify server is running
 app.get('/api/test', (req, res) => {
-  res.json({ message: 'Server is running' });
+  res.json({ status: 'Server is running' });
 });
 
-// Create reusable transporter with more secure settings
+// Create transporter with debug logging
 const transporter = nodemailer.createTransport({
+  service: 'gmail',
   host: 'smtp.gmail.com',
   port: 587,
   secure: false,
@@ -24,59 +39,67 @@ const transporter = nodemailer.createTransport({
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS
   },
-  tls: {
-    rejectUnauthorized: false
-  }
+  debug: true, // Enable debug logs
+  logger: true  // Enable logger
 });
 
-// Test the email configuration
-transporter.verify(function (error, success) {
-  if (error) {
-    console.log('Email verification error:', error);
-  } else {
-    console.log('Server is ready to send emails');
-  }
-});
-
-// Endpoint for admin notification
 app.post('/api/notify-admin', async (req, res) => {
+  console.log('Received notification request:', req.body);
   const { name, email } = req.body;
-  
-  const mailOptions = {
-    from: process.env.EMAIL_USER,
-    to: process.env.ADMIN_EMAIL, // Get admin email from env
-    subject: 'New User Registration Request',
-    html: `
-      <h2>New User Registration Request</h2>
-      <p><strong>Name:</strong> ${name}</p>
-      <p><strong>Email:</strong> ${email}</p>
-      <p><strong>Registration Time:</strong> ${new Date().toLocaleString()}</p>
-      <p>Please review this request in your admin dashboard.</p>
-      <a href="${process.env.APP_URL}/admin/verify" style="
-        background-color: #4CAF50;
-        border: none;
-        color: white;
-        padding: 15px 32px;
-        text-align: center;
-        text-decoration: none;
-        display: inline-block;
-        font-size: 16px;
-        margin: 4px 2px;
-        cursor: pointer;
-      ">Review Request</a>
-    `
-  };
 
   try {
-    await transporter.sendMail(mailOptions);
-    res.status(200).json({ message: 'Admin notification sent successfully' });
+    // Verify transporter configuration
+    await transporter.verify();
+    console.log('Transporter verified successfully');
+
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: process.env.ADMIN_EMAIL,
+      subject: 'New User Registration Request',
+      html: `
+        <h2>New User Registration Request</h2>
+        <p><strong>Name:</strong> ${name}</p>
+        <p><strong>Email:</strong> ${email}</p>
+        <p><strong>Time:</strong> ${new Date().toLocaleString()}</p>
+        <p>Please review this request in your admin dashboard.</p>
+        <a href="http://shipping-management.vercel.app" style="
+            background-color: #4CAF50;
+            border: none;
+            color: white;
+            padding: 15px 32px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 4px 2px;
+            cursor: pointer;
+        ">Review Request</a>
+      `
+    };
+
+    console.log('Sending email with options:', mailOptions);
+    const info = await transporter.sendMail(mailOptions);
+    console.log('Email sent successfully:', info.response);
+    
+    res.status(200).json({ 
+      message: 'Admin notification sent successfully',
+      messageId: info.messageId
+    });
   } catch (error) {
-    console.error('Error sending admin notification:', error);
-    res.status(500).json({ error: 'Failed to send admin notification' });
+    console.error('Detailed error:', error);
+    res.status(500).json({ 
+      error: 'Failed to send admin notification',
+      details: error.message 
+    });
   }
 });
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  console.log('Environment variables loaded:', {
+    EMAIL_USER: process.env.EMAIL_USER ? 'Set' : 'Not set',
+    EMAIL_PASS: process.env.EMAIL_PASS ? 'Set' : 'Not set',
+    ADMIN_EMAIL: process.env.ADMIN_EMAIL ? 'Set' : 'Not set'
+  });
 });
