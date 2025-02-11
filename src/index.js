@@ -1,37 +1,38 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import './index.css';  // Make sure you have this file
 import App from './App';
 
-const root = ReactDOM.createRoot(document.getElementById('root'));
-root.render(
-  <React.StrictMode>
-    <ErrorBoundary>
-      <App />
-    </ErrorBoundary>
-  </React.StrictMode>
-);
-
-// Add error boundary component
+// Define ErrorBoundary before using it
 class ErrorBoundary extends React.Component {
-  state = { hasError: false, error: null };
-
-  static getDerivedStateFromError(error) {
-    return { hasError: true, error };
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
   }
 
-  componentDidCatch(error, info) {
-    console.error('App Error:', error, info);
+  static getDerivedStateFromError(error) {
+    console.error('Error caught in boundary:', error);
+    return { hasError: true };
   }
 
   render() {
     if (this.state.hasError) {
       return (
-        <div style={{ padding: 20 }}>
-          <h1>Something went wrong.</h1>
-          <pre>{String(this.state.error)}</pre>
+        <div style={{ padding: 20, textAlign: 'center' }}>
+          <h1>Something went wrong</h1>
+          <button onClick={() => window.location.reload()}>
+            Reload Page
+          </button>
         </div>
       );
     }
     return this.props.children;
   }
 }
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(
+  <ErrorBoundary>
+    <App />
+  </ErrorBoundary>
+);
