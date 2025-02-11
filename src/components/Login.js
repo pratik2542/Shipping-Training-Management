@@ -11,6 +11,7 @@ import { db } from '../firebase/config';
 import HelpIcon from '@mui/icons-material/Help';
 import { Tooltip, IconButton } from '@mui/material';
 import CircularProgress from '@mui/material/CircularProgress';
+import { getApiUrl } from '../config/api';
 
 const ADMIN_EMAILS = ['pratikmak2542@gmail.com']; // Add your admin emails here
 
@@ -30,15 +31,13 @@ const Login = () => {
 
   const sendAdminNotification = async (userData) => {
     try {
-      const response = await fetch('/api/notify-admin', { // Remove localhost:5000 and use relative path
+      const response = await fetch(getApiUrl('/api/notify-admin'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          name: userData.name,
-          email: userData.email
-        })
+        body: JSON.stringify(userData),
+        credentials: 'include'
       });
 
       if (!response.ok) {

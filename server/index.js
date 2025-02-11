@@ -4,15 +4,37 @@ const nodemailer = require('nodemailer');
 require('dotenv').config();
 
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: ['http://localhost:3000', 'https://shipping-management.vercel.app'],
+  credentials: true
+}));
 app.use(express.json());
 
-// Create reusable transporter
+// Add a test route
+app.get('/api/test', (req, res) => {
+  res.json({ message: 'Server is running' });
+});
+
+// Create reusable transporter with more secure settings
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: 'smtp.gmail.com',
+  port: 587,
+  secure: false,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS
+  },
+  tls: {
+    rejectUnauthorized: false
+  }
+});
+
+// Test the email configuration
+transporter.verify(function (error, success) {
+  if (error) {
+    console.log('Email verification error:', error);
+  } else {
+    console.log('Server is ready to send emails');
   }
 });
 
