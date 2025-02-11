@@ -15,6 +15,9 @@ import CircularProgress from '@mui/material/CircularProgress';
 const ADMIN_EMAILS = ['pratikmak2542@gmail.com']; // Add your admin emails here
 
 const Login = () => {
+  // Add this console log to verify which API URL is being used
+  console.log('API URL:', process.env.REACT_APP_API_URL);
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -27,8 +30,7 @@ const Login = () => {
 
   const sendAdminNotification = async (userData) => {
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
-      const response = await fetch(`${apiUrl}/api/notify-admin`, {
+      const response = await fetch('/api/notify-admin', { // Remove localhost:5000 and use relative path
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
