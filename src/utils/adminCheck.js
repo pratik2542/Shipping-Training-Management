@@ -5,7 +5,7 @@ import { Navigate } from 'react-router-dom';
 import { CircularProgress, Container } from '@mui/material';
 
 // List of admin emails
-const ADMIN_EMAILS = ['bhumisadariya18@gmail.com']; // Replace with your admin email
+const ADMIN_EMAILS = ['pratikmak2542@gmail.com']; // Replace with your admin email
 
 export const isAdmin = async (uid) => {
   try {

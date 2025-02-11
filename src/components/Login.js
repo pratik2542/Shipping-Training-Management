@@ -12,7 +12,7 @@ import HelpIcon from '@mui/icons-material/Help';
 import { Tooltip, IconButton } from '@mui/material';
 import CircularProgress from '@mui/material/CircularProgress';
 
-const ADMIN_EMAILS = ['bhumisadariya18@gmail.com']; // Add your admin emails here
+const ADMIN_EMAILS = ['pratikmak2542@gmail.com']; // Add your admin emails here
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -27,7 +27,8 @@ const Login = () => {
 
   const sendAdminNotification = async (userData) => {
     try {
-      const response = await fetch('http://localhost:5000/api/notify-admin', {
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const response = await fetch(`${apiUrl}/api/notify-admin`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
