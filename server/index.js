@@ -17,30 +17,25 @@ if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS || !process.env.ADMIN_EMA
 
 const app = express();
 
-// Update CORS to be more permissive in development
+// Update CORS configuration for both local and production
 app.use(cors({
-  origin: '*',
-  methods: ['GET', 'POST', 'OPTIONS']
+  origin: ['http://localhost:3000', 'https://shipping-management.vercel.app'],
+  credentials: true
 }));
 app.use(express.json());
 
-// Test route to verify server is running
-app.get('/api/test', (req, res) => {
-  res.json({ status: 'Server is running' });
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Create transporter with debug logging
+// Configure nodemailer transporter
 const transporter = nodemailer.createTransport({
   service: 'gmail',
-  host: 'smtp.gmail.com',
-  port: 587,
-  secure: false,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS
-  },
-  debug: true, // Enable debug logs
-  logger: true  // Enable logger
+  }
 });
 
 app.post('/api/notify-admin', async (req, res) => {
@@ -48,10 +43,6 @@ app.post('/api/notify-admin', async (req, res) => {
   const { name, email } = req.body;
 
   try {
-    // Verify transporter configuration
-    await transporter.verify();
-    console.log('Transporter verified successfully');
-
     const mailOptions = {
       from: process.env.EMAIL_USER,
       to: process.env.ADMIN_EMAIL,
@@ -77,29 +68,21 @@ app.post('/api/notify-admin', async (req, res) => {
       `
     };
 
-    console.log('Sending email with options:', mailOptions);
     const info = await transporter.sendMail(mailOptions);
-    console.log('Email sent successfully:', info.response);
-    
-    res.status(200).json({ 
-      message: 'Admin notification sent successfully',
-      messageId: info.messageId
-    });
+    console.log('Email sent:', info.messageId);
+    res.status(200).json({ success: true, messageId: info.messageId });
   } catch (error) {
-    console.error('Detailed error:', error);
-    res.status(500).json({ 
-      error: 'Failed to send admin notification',
-      details: error.message 
-    });
+    console.error('Email error:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
-  console.log('Environment variables loaded:', {
-    EMAIL_USER: process.env.EMAIL_USER ? 'Set' : 'Not set',
-    EMAIL_PASS: process.env.EMAIL_PASS ? 'Set' : 'Not set',
-    ADMIN_EMAIL: process.env.ADMIN_EMAIL ? 'Set' : 'Not set'
+  console.log('Email configuration:', {
+    USER: process.env.EMAIL_USER ? 'Set' : 'Not set',
+    PASS: process.env.EMAIL_PASS ? 'Set' : 'Not set',
+    ADMIN: process.env.ADMIN_EMAIL ? 'Set' : 'Not set'
   });
 });

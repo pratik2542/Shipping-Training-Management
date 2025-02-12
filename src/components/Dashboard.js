@@ -52,8 +52,11 @@ const Dashboard = () => {
     getUserName();
 
     const checkAdminAndPending = async () => {
+      const isTestUser = localStorage.getItem('isTestUser') === 'true';
       const storedAdmin = localStorage.getItem('isAdmin') === 'true';
-      if (storedAdmin) {
+      
+      // Only set admin if user is not a test user and is an admin
+      if (storedAdmin && !isTestUser) {
         setIsAdmin(true);
         // Check for pending requests
         const pendingQuery = query(
@@ -66,6 +69,7 @@ const Dashboard = () => {
         setShowNotification(count > 0);
       }
     };
+    
     checkAdminAndPending();
   }, []);
 
