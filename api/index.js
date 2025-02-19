@@ -29,6 +29,18 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Add test endpoint
+app.get('/api/test', (req, res) => {
+  res.json({ 
+    status: 'Server is running',
+    env: {
+      EMAIL_USER: process.env.EMAIL_USER ? 'Set' : 'Not set',
+      EMAIL_PASS: process.env.EMAIL_PASS ? 'Set' : 'Not set',
+      ADMIN_EMAIL: process.env.ADMIN_EMAIL ? 'Set' : 'Not set'
+    }
+  });
+});
+
 // Configure nodemailer transporter
 const transporter = nodemailer.createTransport({
   service: 'gmail',

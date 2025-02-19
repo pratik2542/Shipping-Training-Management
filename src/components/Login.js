@@ -31,7 +31,7 @@ const Login = () => {
 
   const sendAdminNotification = async (userData) => {
     try {
-      console.log('Sending notification to:', getApiUrl('/notify-admin'));
+      console.log('Sending notification with data:', userData);
       const response = await fetch(getApiUrl('/notify-admin'), {
         method: 'POST',
         headers: {
@@ -49,8 +49,8 @@ const Login = () => {
 
       return data;
     } catch (error) {
-      console.error('Detailed error:', error);
-      throw error; // Re-throw to handle in handleRegister
+      console.error('Notification error:', error);
+      throw new Error('Failed to send registration notification. Please try again.');
     }
   };
 
