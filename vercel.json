@@ -21,6 +21,11 @@
     {
       "src": "/(.*)",
       "dest": "/index.html"
+    },
+    {
+      "src": "/api/.*",
+      "methods": ["GET", "POST", "OPTIONS"],
+      "dest": "/api"
     }
   ]
 }
