@@ -23,9 +23,9 @@
       "dest": "/index.html"
     },
     {
-      "src": "/api/.*",
-      "methods": ["GET", "POST", "OPTIONS"],
-      "dest": "/api"
+      "src": "/api/notify-admin",
+      "methods": ["POST", "OPTIONS"],
+      "dest": "/api/notify-admin"
     }
   ]
 }
