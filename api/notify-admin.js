@@ -1,24 +1,38 @@
 const nodemailer = require('nodemailer');
 
-module.exports = async (req, res) => {
-  // Enable CORS
-  res.setHeader('Access-Control-Allow-Credentials', true);
+const handler = async (req, res) => {
+  // Log the incoming request
+  console.log('Request method:', req.method);
+  console.log('Request body:', req.body);
+
+  // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  // Handle preflight
+  // Handle preflight request
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
+  // Only allow POST
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    return res.status(405).json({
+      error: `Method ${req.method} Not Allowed`,
+      allowedMethods: ['POST']
+    });
   }
 
   try {
-    console.log('Received request:', req.body);
     const { name, email } = req.body;
+    
+    if (!name || !email) {
+      return res.status(400).json({
+        error: 'Missing required fields',
+        required: ['name', 'email'],
+        received: { name, email }
+      });
+    }
 
     const transporter = nodemailer.createTransport({
       host: 'smtp.gmail.com',
@@ -30,7 +44,7 @@ module.exports = async (req, res) => {
       }
     });
 
-    const mailOptions = {
+    await transporter.sendMail({
       from: process.env.EMAIL_USER,
       to: process.env.ADMIN_EMAIL,
       subject: 'New User Registration Request',
@@ -40,20 +54,19 @@ module.exports = async (req, res) => {
         <p><strong>Email:</strong> ${email}</p>
         <p><strong>Time:</strong> ${new Date().toLocaleString()}</p>
       `
-    };
+    });
 
-    const info = await transporter.sendMail(mailOptions);
-    console.log('Email sent successfully:', info.messageId);
-    
     return res.status(200).json({
       success: true,
-      message: 'Email sent successfully'
+      message: 'Notification sent successfully'
     });
   } catch (error) {
-    console.error('Error sending email:', error);
+    console.error('Error:', error);
     return res.status(500).json({
-      error: 'Failed to send email',
-      details: error.message
+      error: 'Internal server error',
+      message: error.message
     });
   }
 };
+
+module.exports = handler;
