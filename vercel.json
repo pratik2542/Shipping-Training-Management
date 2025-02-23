@@ -17,15 +17,7 @@
     {
       "src": "/api/notify-admin",
       "methods": ["POST", "OPTIONS"],
-      "dest": "/api/notify-admin"
-    },
-    {
-      "src": "/static/(.*)",
-      "dest": "/static/$1"
-    },
-    {
-      "src": "/(.*)\\.(.+)",
-      "dest": "/$1.$2"
+      "dest": "/api/notify-admin.js"
     },
     {
       "src": "/(.*)",
