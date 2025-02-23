@@ -1,28 +1,24 @@
 const nodemailer = require('nodemailer');
 
-export default async function handler(req, res) {
-  // Set CORS headers
+module.exports = async (req, res) => {
+  // Enable CORS
+  res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  // Handle preflight request
+  // Handle preflight
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
-  // Only allow POST method
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: `Method ${req.method} Not Allowed` });
+    return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
-    console.log('Request received:', req.body);
+    console.log('Received request:', req.body);
     const { name, email } = req.body;
-
-    if (!name || !email) {
-      return res.status(400).json({ error: 'Name and email are required' });
-    }
 
     const transporter = nodemailer.createTransport({
       host: 'smtp.gmail.com',
@@ -34,7 +30,7 @@ export default async function handler(req, res) {
       }
     });
 
-    const info = await transporter.sendMail({
+    const mailOptions = {
       from: process.env.EMAIL_USER,
       to: process.env.ADMIN_EMAIL,
       subject: 'New User Registration Request',
@@ -44,15 +40,20 @@ export default async function handler(req, res) {
         <p><strong>Email:</strong> ${email}</p>
         <p><strong>Time:</strong> ${new Date().toLocaleString()}</p>
       `
-    });
+    };
 
-    return res.status(200).json({ 
+    const info = await transporter.sendMail(mailOptions);
+    console.log('Email sent successfully:', info.messageId);
+    
+    return res.status(200).json({
       success: true,
-      message: 'Email sent successfully',
-      messageId: info.messageId
+      message: 'Email sent successfully'
     });
   } catch (error) {
-    console.error('Error:', error);
-    return res.status(500).json({ error: error.message });
+    console.error('Error sending email:', error);
+    return res.status(500).json({
+      error: 'Failed to send email',
+      details: error.message
+    });
   }
-}
+};
