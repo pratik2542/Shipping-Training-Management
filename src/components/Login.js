@@ -30,23 +30,27 @@ const Login = () => {
   const navigate = useNavigate();
 
   const sendAdminNotification = async (userData) => {
+    console.log('Sending notification data:', userData);
+    
     try {
-      console.log('Sending notification with data:', userData);
-      const response = await fetch(getApiUrl('/notify-admin'), {
+      const response = await fetch(getApiUrl('notify-admin'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(userData)
+        body: JSON.stringify({
+          name: userData.name,
+          email: userData.email
+        })
       });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to send notification');
+      }
 
       const data = await response.json();
       console.log('Server response:', data);
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to send notification');
-      }
-
       return data;
     } catch (error) {
       console.error('Notification error:', error);
