@@ -3,12 +3,13 @@ const nodemailer = require('nodemailer');
 const handler = async (req, res) => {
   // Log the incoming request
   console.log('Request method:', req.method);
+  console.log('Request headers:', req.headers);
   console.log('Request body:', req.body);
 
   // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
   // Handle preflight request
   if (req.method === 'OPTIONS') {
