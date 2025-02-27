@@ -19,7 +19,7 @@ import {
   Button,
   Box,
 } from '@mui/material';
-import { collection, getDocs, deleteDoc, doc } from 'firebase/firestore';
+import { collection, getDocs, deleteDoc, doc, query, orderBy } from 'firebase/firestore';
 import { db, auth } from '../firebase/config';
 import { testDb, testAuth } from '../firebase/testConfig';
 import SearchIcon from '@mui/icons-material/Search';
@@ -51,34 +51,21 @@ const Records = () => {
       const dbInstance = isTestUser ? testDb : db;
       const collectionName = isTestUser ? 'test_shipments' : 'shipments';
       
-      // First, check if collection exists for test users
-      if (isTestUser) {
-        // For test users, empty records are normal - don't show error
-        const querySnapshot = await getDocs(collection(dbInstance, collectionName));
-        const recordsData = querySnapshot.docs.map(doc => ({
-          ...doc.data(),
-          docId: doc.id,
-          id: doc.data().id
-        }));
-        setRecords(recordsData);
-      } else {
-        // For regular users, proceed with normal fetch
-        const querySnapshot = await getDocs(collection(dbInstance, collectionName));
-        const recordsData = querySnapshot.docs.map(doc => ({
-          ...doc.data(),
-          docId: doc.id,
-          id: doc.data().id
-        }));
-        setRecords(recordsData);
-      }
+      // Update query to order by numericId in descending order
+      const q = query(
+        collection(dbInstance, collectionName),
+        orderBy('numericId', 'desc')
+      );
+      
+      const querySnapshot = await getDocs(q);
+      const recordsData = querySnapshot.docs.map(doc => ({
+        ...doc.data(),
+        docId: doc.id,
+        id: doc.data().id
+      }));
+      setRecords(recordsData);
     } catch (error) {
       console.error('Error fetching records:', error);
-      const isTestUser = localStorage.getItem('isTestUser') === 'true';
-      if (!isTestUser) {
-        // Only show error alert for regular users
-        alert('Error fetching records');
-      }
-      // For test users, just set empty records
       setRecords([]);
     }
   };
@@ -210,6 +197,7 @@ const Records = () => {
       key={record.id || record.docId}
       sx={{ '&:hover': { backgroundColor: 'action.hover' } }}
     >
+      <TableCell>{record.id}</TableCell>
       <TableCell>{record.shipmentCode || 'N/A'}</TableCell> {/* Change from dpNumber to shipmentCode */}
       <TableCell>{record.shipmentDate || 'N/A'}</TableCell>
       <TableCell>{record.itemName || 'N/A'}</TableCell>
@@ -265,28 +253,29 @@ const Records = () => {
   );
 
   const ViewDialog = () => (
-    <Dialog 
-      open={viewDialogOpen} 
-      onClose={() => setViewDialogOpen(false)}
-      maxWidth="md"
-      fullWidth
-    >
+    <Dialog open={viewDialogOpen} onClose={() => setViewDialogOpen(false)} maxWidth="md" fullWidth>
       <DialogTitle>
-        Shipping Record Details - {selectedRecord?.shipmentCode}  {/* Update from dpNumber to shipmentCode */}
+        Shipping Record Details - {selectedRecord?.shipmentCode}
       </DialogTitle>
       <DialogContent>
         {selectedRecord && (
           <Table>
             <TableBody>
-              {/* Basic Details */}
+              {/* Basic Information */}
               <TableRow>
-                <TableCell><strong>Shipment Code</strong></TableCell>  {/* Update label */}
-                <TableCell>{selectedRecord.shipmentCode}</TableCell>  {/* Update from dpNumber */}
+                <TableCell><strong>ID</strong></TableCell>
+                <TableCell>{selectedRecord.id}</TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell><strong>Shipment Code</strong></TableCell>
+                <TableCell>{selectedRecord.shipmentCode}</TableCell>
               </TableRow>
               <TableRow>
                 <TableCell><strong>Shipment Date</strong></TableCell>
                 <TableCell>{selectedRecord.shipmentDate}</TableCell>
               </TableRow>
+
+              {/* Item Details */}
               <TableRow>
                 <TableCell><strong>Item Number</strong></TableCell>
                 <TableCell>{selectedRecord.itemNo}</TableCell>
@@ -299,10 +288,58 @@ const Records = () => {
                 <TableCell><strong>Lot Number</strong></TableCell>
                 <TableCell>{selectedRecord.lotNumber}</TableCell>
               </TableRow>
+
+              {/* Quantity Information */}
               <TableRow>
                 <TableCell><strong>Quantities</strong></TableCell>
                 <TableCell>{selectedRecord.quantities}</TableCell>
               </TableRow>
+              <TableRow>
+                <TableCell><strong>Remaining Quantity</strong></TableCell>
+                <TableCell>{selectedRecord.remainingQuantity}</TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell><strong>Unit</strong></TableCell>
+                <TableCell>{selectedRecord.unit}</TableCell>
+              </TableRow>
+
+              {/* New Fields */}
+              <TableRow>
+                <TableCell><strong>Qualified Manufacturer</strong></TableCell>
+                <TableCell>{selectedRecord.qualifiedManufacturer}</TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell><strong>Vendor</strong></TableCell>
+                <TableCell>{selectedRecord.vendor}</TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell><strong>Transportation</strong></TableCell>
+                <TableCell>{selectedRecord.transportation}</TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell><strong>Landing Bill Number</strong></TableCell>
+                <TableCell>{selectedRecord.landingBillNumber}</TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell><strong>Expiry Date</strong></TableCell>
+                <TableCell>{selectedRecord.expiryDate}</TableCell>
+              </TableRow>
+
+              {/* Damage Information */}
+              <TableRow>
+                <TableCell><strong>Damage to Packaging</strong></TableCell>
+                <TableCell>{selectedRecord.damageToPackaging ? 'Yes' : 'No'}</TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell><strong>Damage to Product</strong></TableCell>
+                <TableCell>{selectedRecord.damageToProduct ? 'Yes' : 'No'}</TableCell>
+              </TableRow>
+              {(selectedRecord.damageToPackaging || selectedRecord.damageToProduct) && (
+                <TableRow>
+                  <TableCell><strong>Damage Notes</strong></TableCell>
+                  <TableCell>{selectedRecord.damageNotes}</TableCell>
+                </TableRow>
+              )}
 
               {/* Receiver Details */}
               {selectedRecord.receiverName && (
@@ -457,6 +494,7 @@ const Records = () => {
         <Table>
           <TableHead>
             <TableRow sx={{ backgroundColor: 'primary.main' }}>
+              <TableCell sx={{ color: 'white', fontWeight: 600 }}>ID</TableCell>
               <TableCell sx={{ color: 'white', fontWeight: 600 }}>Shipment Code</TableCell>  {/* Update header */}
               <TableCell sx={{ color: 'white', fontWeight: 600 }}>Shipment Date</TableCell>
               <TableCell sx={{ color: 'white', fontWeight: 600 }}>Item Name</TableCell>

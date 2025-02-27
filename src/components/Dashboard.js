@@ -197,7 +197,7 @@ const Dashboard = () => {
             onClick={() => navigate('/shipping-form')}
             sx={{ mt: 2 }}
           >
-            Create Shipping Form
+            Create Form
           </Button>
         </Paper>
 

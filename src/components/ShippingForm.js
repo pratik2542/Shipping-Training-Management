@@ -18,7 +18,8 @@ import { db } from '../firebase/config';
 import { testDb } from '../firebase/testConfig';
 import { useNavigate, useLocation } from 'react-router-dom';
 import SignaturePad from 'react-signature-canvas';
-//import { generatePDF } from '../utils/pdfGenerator';
+import { MenuItem, FormControl, InputLabel, Select, FormControlLabel, Checkbox, IconButton } from '@mui/material';
+import ClearIcon from '@mui/icons-material/Clear';
 
 const SignatureDialog = ({ open, onClose, onSave, title }) => {
   const sigPadRef = useRef(null);
@@ -96,7 +97,18 @@ const ShippingForm = () => {
     approverSign: '',
     approverDate: '',
     attachmentUrl: '',     // This will store base64 string
-    attachmentName: ''     // This will store the file name
+    attachmentName: '',     // This will store the file name
+    qualifiedManufacturer: '',
+    landingBillNumber: '',
+    remainingQuantity: 0,
+    unit: '',
+    expiryDate: null,
+    damageToPackaging: false,
+    damageToProduct: false,
+    totalQuantityAccepted: 0,
+    damageNotes: '',
+    vendor: '', // Add new vendor field
+    transportation: '', // Add new transportation field
   });
   const [signatureDialogOpen, setSignatureDialogOpen] = useState(false);
   const [currentSignatureField, setCurrentSignatureField] = useState('');
@@ -172,7 +184,18 @@ const ShippingForm = () => {
               approverSign: data.approverSign || '',
               approverDate: data.approverDate || '',
               attachmentUrl: data.attachmentUrl || '',
-              attachmentName: data.attachmentName || ''
+              attachmentName: data.attachmentName || '',
+              qualifiedManufacturer: data.qualifiedManufacturer || '',
+              landingBillNumber: data.landingBillNumber || '',
+              remainingQuantity: data.remainingQuantity || 0,
+              unit: data.unit || '',
+              expiryDate: data.expiryDate || null,
+              damageToPackaging: data.damageToPackaging || false,
+              damageToProduct: data.damageToProduct || false,
+              totalQuantityAccepted: data.totalQuantityAccepted || 0,
+              damageNotes: data.damageNotes || '',
+              vendor: data.vendor || '', // Add new vendor field
+              transportation: data.transportation || '', // Add new transportation field
             });
             setRecordFromDatabase(data);
           } else {
@@ -201,7 +224,18 @@ const ShippingForm = () => {
             approverSign: '',
             approverDate: '',
             attachmentUrl: '',
-            attachmentName: ''
+            attachmentName: '',
+            qualifiedManufacturer: '',
+            landingBillNumber: '',
+            remainingQuantity: 0,
+            unit: '',
+            expiryDate: null,
+            damageToPackaging: false,
+            damageToProduct: false,
+            totalQuantityAccepted: 0,
+            damageNotes: '',
+            vendor: '', // Add new vendor field
+            transportation: '', // Add new transportation field
           });
         }
       } catch (error) {
@@ -222,24 +256,38 @@ const ShippingForm = () => {
       const dbInstance = isTestUser ? testDb : db;
       const collectionName = isTestUser ? 'test_shipments' : 'shipments';
 
-      // Generate ID only when submitting and only from main collection for non-test users
-      let nextId = 1;
-      if (!isTestUser) {
-        // For regular users, query only the main shipments collection
-        const q = query(
-          collection(db, 'shipments'),
-          orderBy('numericId', 'desc'),
-          limit(1)
-        );
-        
-        const querySnapshot = await getDocs(q);
-        if (!querySnapshot.empty) {
-          const lastDoc = querySnapshot.docs[0].data();
-          nextId = (parseInt(lastDoc.numericId) || 0) + 1;
+      // Only generate new ID for new records, not for edits
+      let dataToSubmit = {
+        ...formData,
+        lastUpdated: new Date().toISOString(),
+        isTestData: isTestUser
+      };
+
+      if (!isEditMode) {
+        // Generate new ID only for new records
+        let nextId = 1;
+        if (!isTestUser) {
+          const q = query(
+            collection(db, 'shipments'),
+            orderBy('numericId', 'desc'),
+            limit(1)
+          );
+          
+          const querySnapshot = await getDocs(q);
+          if (!querySnapshot.empty) {
+            const lastDoc = querySnapshot.docs[0].data();
+            nextId = (parseInt(lastDoc.numericId) || 0) + 1;
+          }
         }
-      } else {
-        // For test users, start from 1 each time
-        nextId = 1;
+
+        // Add new ID fields only for new records
+        dataToSubmit = {
+          ...dataToSubmit,
+          id: nextId.toString(),
+          numericId: nextId,
+          uniqueId: `${nextId}-${Date.now()}`,
+          createdAt: new Date().toISOString()
+        };
       }
 
       // Validate required fields based on the stage
@@ -265,22 +313,15 @@ const ShippingForm = () => {
                     formData.receiverSign ? 'Pending Inspection' : 
                     'Pending Shipment';
 
-      const dataToSubmit = {
-        ...formData,
-        id: nextId.toString(),
-        numericId: nextId,
-        uniqueId: `${nextId}-${Date.now()}`,
-        shipmentCode: formData.shipmentCode,
-        status: status,
-        lastUpdated: new Date().toISOString(),
-        isTestData: isTestUser // Add flag to identify test data
+      dataToSubmit = {
+        ...dataToSubmit,
+        status: status
       };
 
       // Save to database
       if (isEditMode && recordId) {
         await updateDoc(doc(dbInstance, collectionName, recordId), dataToSubmit);
       } else {
-        dataToSubmit.createdAt = new Date().toISOString();
         await addDoc(collection(dbInstance, collectionName), dataToSubmit);
       }
 
@@ -293,38 +334,34 @@ const ShippingForm = () => {
       alert(`Error submitting form: ${errorMessage}. Please try again.`);
     }
   };
-/*
-  // Add new function to handle PDF generation
-  const handleGeneratePDF = async () => {
-    try {
-      const pdfDoc = await generatePDF(formData);
-      const pdfBlob = new Blob([pdfDoc], { type: 'application/pdf' });
-      const pdfUrl = URL.createObjectURL(pdfBlob);
-      
-      window.open(pdfUrl, '_blank');
-      setTimeout(() => URL.revokeObjectURL(pdfUrl), 1000);
-    } catch (error) {
-      console.error('Error generating PDF:', error);
-      alert('Error generating PDF. Please try again.');
-    }
-  };*/
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
+    const { name, value, type, checked } = e.target;
+    const newValue = type === 'checkbox' ? checked : value;
+
     setFormData(prev => {
-      const newData = { ...prev, [name]: value };
-      
+      const updatedData = {
+        ...prev,
+        [name]: newValue
+      };
+
+      // Auto-calculate remaining quantity
+      if (name === 'quantities') {
+        updatedData.remainingQuantity = Number(value);
+        updatedData.totalQuantityAccepted = Number(value);
+      }
+
       // Generate shipment code if all required fields are present
       if (['itemNo', 'lotNumber', 'shipmentDate'].includes(name)) {
         const shipmentCode = generateShipmentCode(
-          name === 'itemNo' ? value : newData.itemNo,
-          name === 'lotNumber' ? value : newData.lotNumber,
-          name === 'shipmentDate' ? value : newData.shipmentDate
+          name === 'itemNo' ? value : updatedData.itemNo,
+          name === 'lotNumber' ? value : updatedData.lotNumber,
+          name === 'shipmentDate' ? value : updatedData.shipmentDate
         );
-        newData.shipmentCode = shipmentCode;
+        updatedData.shipmentCode = shipmentCode;
       }
       
-      return newData;
+      return updatedData;
     });
   };
 
@@ -375,26 +412,26 @@ const ShippingForm = () => {
 
 
   const canModifyField = (fieldName) => {
-    // For new forms
-    if (!isEditMode) {
+     if (!isEditMode) {
       return fieldName.startsWith('receiver');
     }
-  
-    // Get database status
-    const currentStatus = recordFromDatabase?.status || 'Pending Shipment';
-  
-    // Permission logic based on database status only
-    switch (currentStatus) {
+
+    const status = recordFromDatabase?.status || 'Pending Shipment';
+
+    switch (status) {
       case 'Pending Shipment':
         return fieldName.startsWith('receiver');
         
       case 'Pending Inspection':
+        // Only inspector fields are editable, receiver fields are read-only
         return fieldName.startsWith('inspector');
         
       case 'Pending Approval':
+        // Only approver fields are editable, others are read-only
         return fieldName.startsWith('approver');
         
       case 'Approved':
+        // Nothing is editable
         return false;
         
       default:
@@ -402,6 +439,60 @@ const ShippingForm = () => {
     }
   };
 
+  const qualifiedManufacturer = [
+    'UPS',
+    'Amazon',
+    'Purolator',
+    'Canada Post',
+    'FedEx',
+    'DHL'
+  ];
+
+  const unitOptions = [
+    'KG',
+    'EA',
+    'Cylinder'
+  ];
+
+  // Add vendor options array with the new values
+  const vendorOptions = [
+    'Zomato',
+    'Swiggy',
+    'BlinkIt',
+    'Zepto'
+  ];
+
+  // Add new function to determine which sections to show
+  const shouldShowSection = (section) => {
+    // New form - only show receiver
+    if (!isEditMode) {
+      return section === 'receiver';
+    }
+
+    // Get current status from database record
+    const status = recordFromDatabase?.status || 'Pending Shipment';
+
+    // Show sections based on workflow progress
+    switch (status) {
+      case 'Pending Shipment':
+        return section === 'receiver';
+        
+      case 'Pending Inspection':
+        // Show both receiver (read-only) and inspector
+        return section === 'receiver' || section === 'inspector';
+        
+      case 'Pending Approval':
+        // Show all sections - receiver and inspector read-only, approver editable
+        return section === 'receiver' || section === 'inspector' || section === 'approver';
+        
+      case 'Approved':
+        // Show all sections as read-only
+        return section === 'receiver' || section === 'inspector' || section === 'approver';
+        
+      default:
+        return section === 'receiver';
+    }
+  };
 
   return (
     <Container maxWidth="md">
@@ -531,161 +622,366 @@ const ShippingForm = () => {
               />
             </Grid>
 
-            {/* Receiver Details */}
-            <Grid item xs={12}>
-              <Typography variant="h6" sx={{ mb: 2, mt: 2 }}>Receiver Details</Typography>
+            {/* New Fields */}
+            <Grid item xs={12} sm={6}>
+              <FormControl fullWidth>
+                <InputLabel>Qualified Manufacturer</InputLabel>
+                <Select
+                  name="qualifiedManufacturer"
+                  value={formData.qualifiedManufacturer}
+                  onChange={handleChange}
+                  label="Qualified Manufacturer"
+                  required
+                  endAdornment={
+                    formData.qualifiedManufacturer && (
+                      <IconButton 
+                        size="small" 
+                        sx={{ mr: 4 }}
+                        onClick={() => setFormData(prev => ({ ...prev, qualifiedManufacturer: '' }))}
+                      >
+                        <ClearIcon fontSize="small" />
+                      </IconButton>
+                    )
+                  }
+                >
+                  {qualifiedManufacturer.map(option => (
+                    <MenuItem key={option} value={option}>{option}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
             </Grid>
 
-            <Grid item xs={12} sm={4}>
+            <Grid item xs={12} sm={6}>
+              <FormControl fullWidth>
+                <InputLabel>Vendor</InputLabel>
+                <Select
+                  name="vendor"
+                  value={formData.vendor}
+                  onChange={handleChange}
+                  label="Vendor"
+                  required
+                  endAdornment={
+                    formData.vendor && (
+                      <IconButton 
+                        size="small" 
+                        sx={{ mr: 4 }}
+                        onClick={() => setFormData(prev => ({ ...prev, vendor: '' }))}
+                      >
+                        <ClearIcon fontSize="small" />
+                      </IconButton>
+                    )
+                  }
+                >
+                  {vendorOptions.map(option => (
+                    <MenuItem key={option} value={option}>{option}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+
+            {/* Add transportation field after vendor field */}
+            <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                name="receiverName"
-                label="Receiver Name"
-                value={formData.receiverName}
+                label="Transportation"
+                name="transportation"
+                value={formData.transportation}
                 onChange={handleChange}
-                disabled={!canModifyField('receiverName')}
+                required
+                placeholder="Enter transportation details"
               />
             </Grid>
 
-            <Grid item xs={12} sm={4}>
-            <Box sx={{ width: '100%', mt: -3 }}>
-                <Typography variant="subtitle2" sx={{ marginBottom: '3px !important' }}>Receiver Signature</Typography>
-                {formData.receiverSign ? (
-                  <Box sx={{ border: '1px solid #ccc', p: 1, mb: 1 }}>
-                    <img 
-                      src={formData.receiverSign} 
-                      alt="Receiver Signature" 
-                      style={{ maxWidth: '100%', height: 'auto' }}
-                    />
-                  </Box>
-                ) : null}
-                {canModifyField('receiverSign') && (
-                  <Button
-                    variant="outlined"
-                    fullWidth
-                    onClick={() => handleSignatureClick('receiverSign')}
-                  >
-                    {formData.receiverSign ? 'Change Signature' : 'Add Signature'}
-                  </Button>
-                )}
-              </Box>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Landing Bill Number"
+                name="landingBillNumber"
+                value={formData.landingBillNumber}
+                onChange={handleChange}
+                required
+              />
             </Grid>
 
-            <Grid item xs={12} sm={4}>
-            <TextField
+            {/* Quantity Fields Row */}
+            <Grid item xs={12} sm={6}>
+              <TextField
                 fullWidth
-                type="date"
-                name="receiverDate"
-                label="Receiver Date"
+                label="Remaining Quantity"
+                value={formData.remainingQuantity}
                 InputLabelProps={{ shrink: true }}
-                value={formData.receiverDate}
-                InputProps={{ readOnly: true }}
-            />
+                InputProps={{
+                  readOnly: true,
+                }}
+                disabled
+              />
             </Grid>
+
+            <Grid item xs={12} sm={6}>
+              <FormControl fullWidth>
+                <InputLabel>Unit</InputLabel>
+                <Select
+                  name="unit"
+                  value={formData.unit}
+                  label="Unit"
+                  onChange={handleChange}
+                  required
+                  endAdornment={
+                    formData.unit && (
+                      <IconButton 
+                        size="small" 
+                        sx={{ mr: 4 }}
+                        onClick={() => setFormData(prev => ({ ...prev, unit: '' }))}
+                      >
+                        <ClearIcon fontSize="small" />
+                      </IconButton>
+                    )
+                  }
+                >
+                  {unitOptions.map(option => (
+                    <MenuItem key={option} value={option}>{option}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                required
+                type="date"
+                name="expiryDate"
+                label="Expiry Date"
+                InputLabelProps={{ shrink: true }}
+                value={formData.expiryDate || ''}
+                onChange={(e) => setFormData(prev => ({
+                  ...prev,
+                  expiryDate: e.target.value
+                }))}
+                sx={{ width: '100%' }}  // Ensure full width
+              />
+            </Grid>
+
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Total Quantity Accepted"
+                name="totalQuantityAccepted"
+                type="number"
+                value={formData.totalQuantityAccepted}
+                onChange={handleChange}
+                required
+              />
+            </Grid>
+
+            <Grid item xs={12} sm={6}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={formData.damageToPackaging}
+                    onChange={handleChange}
+                    name="damageToPackaging"
+                  />
+                }
+                label="Damage to Packaging"
+              />
+            </Grid>
+
+            <Grid item xs={12} sm={6}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={formData.damageToProduct}
+                    onChange={handleChange}
+                    name="damageToProduct"
+                  />
+                }
+                label="Damage to Product"
+              />
+            </Grid>
+
+            {(formData.damageToPackaging || formData.damageToProduct) && (
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  multiline
+                  rows={4}
+                  label="Damage Notes"
+                  name="damageNotes"
+                  value={formData.damageNotes}
+                  onChange={handleChange}
+                  required
+                />
+              </Grid>
+            )}
+
+            {/* Receiver Details */}
+            {shouldShowSection('receiver') && (
+              <>
+                <Grid item xs={12}>
+                  <Typography variant="h6" sx={{ mb: 2, mt: 2 }}>Receiver Details</Typography>
+                </Grid>
+
+                <Grid item xs={12} sm={4}>
+                  <TextField
+                    fullWidth
+                    name="receiverName"
+                    label="Receiver Name"
+                    value={formData.receiverName}
+                    onChange={handleChange}
+                    disabled={!canModifyField('receiverName')}
+                  />
+                </Grid>
+
+                <Grid item xs={12} sm={4}>
+                <Box sx={{ width: '100%', mt: -3 }}>
+                    <Typography variant="subtitle2" sx={{ marginBottom: '3px !important' }}>Receiver Signature</Typography>
+                    {formData.receiverSign ? (
+                      <Box sx={{ border: '1px solid #ccc', p: 1, mb: 1 }}>
+                        <img 
+                          src={formData.receiverSign} 
+                          alt="Receiver Signature" 
+                          style={{ maxWidth: '100%', height: 'auto' }}
+                        />
+                      </Box>
+                    ) : null}
+                    {canModifyField('receiverSign') && (
+                      <Button
+                        variant="outlined"
+                        fullWidth
+                        onClick={() => handleSignatureClick('receiverSign')}
+                      >
+                        {formData.receiverSign ? 'Change Signature' : 'Add Signature'}
+                      </Button>
+                    )}
+                  </Box>
+                </Grid>
+
+                <Grid item xs={12} sm={4}>
+                <TextField
+                    fullWidth
+                    type="date"
+                    name="receiverDate"
+                    label="Receiver Date"
+                    InputLabelProps={{ shrink: true }}
+                    value={formData.receiverDate}
+                    InputProps={{ readOnly: true }}
+                />
+                </Grid>
+              </>
+            )}
 
             {/* Inspector Details */}
-            <Grid item xs={12}>
-              <Typography variant="h6" sx={{ mb: 2, mt: 2 }}>Inspector Details</Typography>
-            </Grid>
+            {shouldShowSection('inspector') && (
+              <>
+                <Grid item xs={12}>
+                  <Typography variant="h6" sx={{ mb: 2, mt: 2 }}>Inspector Details</Typography>
+                </Grid>
 
-            <Grid item xs={12} sm={4}>
-              <TextField
-                fullWidth
-                name="inspectorName"
-                label="Inspector Name"
-                value={formData.inspectorName}
-                onChange={handleChange}
-                disabled={!canModifyField('inspectorName')}
-              />
-            </Grid>
-
-            <Grid item xs={12} sm={4}>
-            <Box sx={{ width: '100%', mt: -3 }}>
-                <Typography variant="subtitle2" sx={{ marginBottom: '3px !important' }}>Inspector Signature</Typography>
-                {formData.inspectorSign ? (
-                  <Box sx={{ border: '1px solid #ccc', p: 1, mb: 1 }}>
-                    <img 
-                      src={formData.inspectorSign} 
-                      alt="Inspector Signature" 
-                      style={{ maxWidth: '100%', height: 'auto' }}
-                    />
-                  </Box>
-                ) : null}
-                {canModifyField('inspectorSign') && (
-                  <Button
-                    variant="outlined"
+                <Grid item xs={12} sm={4}>
+                  <TextField
                     fullWidth
-                    onClick={() => handleSignatureClick('inspectorSign')}
-                  >
-                    {formData.inspectorSign ? 'Change Signature' : 'Add Signature'}
-                  </Button>
-                )}
-              </Box>
-            </Grid>
+                    name="inspectorName"
+                    label="Inspector Name"
+                    value={formData.inspectorName}
+                    onChange={handleChange}
+                    disabled={!canModifyField('inspectorName')}
+                  />
+                </Grid>
 
-            <Grid item xs={12} sm={4}>
-              <TextField
-                fullWidth
-                type="date"
-                name="inspectorDate"
-                label="Inspector Date"
-                InputLabelProps={{ shrink: true }}
-                value={formData.inspectorDate}
-                InputProps={{ readOnly: true }}
-              />
-            </Grid>
+                <Grid item xs={12} sm={4}>
+                <Box sx={{ width: '100%', mt: -3 }}>
+                    <Typography variant="subtitle2" sx={{ marginBottom: '3px !important' }}>Inspector Signature</Typography>
+                    {formData.inspectorSign ? (
+                      <Box sx={{ border: '1px solid #ccc', p: 1, mb: 1 }}>
+                        <img 
+                          src={formData.inspectorSign} 
+                          alt="Inspector Signature" 
+                          style={{ maxWidth: '100%', height: 'auto' }}
+                        />
+                      </Box>
+                    ) : null}
+                    {canModifyField('inspectorSign') && (
+                      <Button
+                        variant="outlined"
+                        fullWidth
+                        onClick={() => handleSignatureClick('inspectorSign')}
+                      >
+                        {formData.inspectorSign ? 'Change Signature' : 'Add Signature'}
+                      </Button>
+                    )}
+                  </Box>
+                </Grid>
+
+                <Grid item xs={12} sm={4}>
+                  <TextField
+                    fullWidth
+                    type="date"
+                    name="inspectorDate"
+                    label="Inspector Date"
+                    InputLabelProps={{ shrink: true }}
+                    value={formData.inspectorDate}
+                    InputProps={{ readOnly: true }}
+                  />
+                </Grid>
+              </>
+            )}
 
             {/* Approver Details */}
-            <Grid item xs={12}>
-              <Typography variant="h6" sx={{ mb: 2, mt: 2 }}>Approver Details</Typography>
-            </Grid>
+            {shouldShowSection('approver') && (
+              <>
+                <Grid item xs={12}>
+                  <Typography variant="h6" sx={{ mb: 2, mt: 2 }}>Approver Details</Typography>
+                </Grid>
 
-            <Grid item xs={12} sm={4}>
-              <TextField
-                fullWidth
-                name="approverName"
-                label="Approver Name"
-                value={formData.approverName}
-                onChange={handleChange}
-                disabled={!canModifyField('approverName')}
-              />
-            </Grid>
-
-            <Grid item xs={12} sm={4}>
-            <Box sx={{ width: '100%', mt: -3 }}>    
-                <Typography variant="subtitle2" sx={{ marginBottom: '3px !important' }}>Approver Signature</Typography>
-                {formData.approverSign ? (
-                  <Box sx={{ border: '1px solid #ccc', p: 1, mb: 1 }}>
-                    <img 
-                      src={formData.approverSign} 
-                      alt="Approver Signature" 
-                      style={{ maxWidth: '100%', height: 'auto' }}
-                    />
-                  </Box>
-                ) : null}
-                {canModifyField('approverSign') && (
-                  <Button
-                    variant="outlined"
+                <Grid item xs={12} sm={4}>
+                  <TextField
                     fullWidth
-                    onClick={() => handleSignatureClick('approverSign')}
-                  >
-                    {formData.approverSign ? 'Change Signature' : 'Add Signature'}
-                  </Button>
-                )}
-              </Box>
-            </Grid>
+                    name="approverName"
+                    label="Approver Name"
+                    value={formData.approverName}
+                    onChange={handleChange}
+                    disabled={!canModifyField('approverName')}
+                  />
+                </Grid>
 
-            <Grid item xs={12} sm={4}>
-              <TextField
-                fullWidth
-                type="date"
-                name="approverDate"
-                label="Approver Date"
-                InputLabelProps={{ shrink: true }}
-                value={formData.approverDate}
-                InputProps={{ readOnly: true }}
-              />
-            </Grid>
+                <Grid item xs={12} sm={4}>
+                <Box sx={{ width: '100%', mt: -3 }}>    
+                    <Typography variant="subtitle2" sx={{ marginBottom: '3px !important' }}>Approver Signature</Typography>
+                    {formData.approverSign ? (
+                      <Box sx={{ border: '1px solid #ccc', p: 1, mb: 1 }}>
+                        <img 
+                          src={formData.approverSign} 
+                          alt="Approver Signature" 
+                          style={{ maxWidth: '100%', height: 'auto' }}
+                        />
+                      </Box>
+                    ) : null}
+                    {canModifyField('approverSign') && (
+                      <Button
+                        variant="outlined"
+                        fullWidth
+                        onClick={() => handleSignatureClick('approverSign')}
+                      >
+                        {formData.approverSign ? 'Change Signature' : 'Add Signature'}
+                      </Button>
+                    )}
+                  </Box>
+                </Grid>
+
+                <Grid item xs={12} sm={4}>
+                  <TextField
+                    fullWidth
+                    type="date"
+                    name="approverDate"
+                    label="Approver Date"
+                    InputLabelProps={{ shrink: true }}
+                    value={formData.approverDate}
+                    InputProps={{ readOnly: true }}
+                  />
+                </Grid>
+              </>
+            )}
 
             {/* Attachment */}
             <Grid item xs={12}>

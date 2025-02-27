@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Paper, Avatar, Box, TextField, Button, Typography, Container } from '@mui/material';
+import { Paper, Avatar, Box, TextField, Button, Typography, Container, Divider } from '@mui/material';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../firebase/config';
 import { useNavigate } from 'react-router-dom';
@@ -12,6 +12,8 @@ import HelpIcon from '@mui/icons-material/Help';
 import { Tooltip, IconButton } from '@mui/material';
 import CircularProgress from '@mui/material/CircularProgress';
 import { getApiUrl } from '../config/api';
+import SearchIcon from '@mui/icons-material/Search';
+import LockResetIcon from '@mui/icons-material/LockReset';
 
 const ADMIN_EMAILS = ['pratikmak2542@gmail.com']; // Add your admin emails here
 
@@ -28,6 +30,51 @@ const Login = () => {
   const [isTestUser, setIsTestUser] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
+
+  const buttonStyles = {
+    py: 1.5,
+    fontSize: '1rem',
+    fontWeight: 500,
+    height: '48px',
+    textTransform: 'none', // Prevents all-caps
+    letterSpacing: '0.3px',
+    '&:hover': {
+      transform: 'translateY(-2px)',
+      transition: 'transform 0.2s',
+    }
+  };
+
+  const outlinedButtonStyles = {
+    ...buttonStyles,
+    borderColor: 'primary.main',
+    '&:hover': {
+      ...buttonStyles['&:hover'],
+      borderColor: 'primary.dark',
+      backgroundColor: 'rgba(25, 118, 210, 0.04)'
+    }
+  };
+
+  const utilityButtonStyles = {
+    ...buttonStyles,
+    height: '42px',
+    backgroundColor: 'white',
+    color: 'primary.main',
+    border: '1px solid',
+    borderColor: 'primary.light',
+    fontWeight: 400,
+    fontSize: '0.9rem',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+    '& .MuiButton-startIcon': {
+      marginRight: 1
+    },
+    '&:hover': {
+      backgroundColor: 'primary.main',
+      color: 'white',
+      boxShadow: '0 4px 8px rgba(0,0,0,0.1)',
+      transform: 'translateY(-2px)',
+      transition: 'all 0.2s ease-in-out'
+    }
+  };
 
   const sendAdminNotification = async (userData) => {
     console.log('Sending notification data:', userData);
@@ -246,7 +293,7 @@ const Login = () => {
                 fullWidth
                 variant="contained"
                 color="primary"
-                sx={{ mt: 3, mb: 2 }}
+                sx={{ ...buttonStyles, mt: 3, mb: 2 }}
                 disabled={isSubmitting}
               >
                 {isSubmitting ? (
@@ -265,7 +312,7 @@ const Login = () => {
                   setShowRegister(false);
                   setName('');
                 }}
-                sx={{ mt: 1 }}
+                sx={{ ...outlinedButtonStyles, mt: 1 }}
               >
                 Back to Login
               </Button>
@@ -297,39 +344,48 @@ const Login = () => {
                     type="submit"
                     fullWidth
                     variant="contained"
-                    size="large"
-                    sx={{ 
-                      py: 1.5,
-                      fontSize: '1.1rem',
-                      '&:hover': {
-                        transform: 'translateY(-2px)',
-                        transition: 'transform 0.2s',
-                      }
-                    }}
+                    sx={buttonStyles}
                   >
                     Sign In
                   </Button>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1, mb: 2 }}>
+                  
+                  {/* Updated utility buttons container */}
+                  <Box sx={{ 
+                    display: 'flex', 
+                    gap: 2,
+                    mt: 3, 
+                    mb: 3,
+                    width: '100%'
+                  }}>
                     <Button
-                      color="primary"
+                      fullWidth
                       onClick={() => navigate('/check-status')}
-                      sx={{ textTransform: 'none' }}
+                      sx={utilityButtonStyles}
+                      startIcon={<SearchIcon sx={{ fontSize: 20 }} />}
                     >
-                      Check Registration Status
+                      Check Status
                     </Button>
                     <Button
-                      color="primary"
+                      fullWidth
                       onClick={() => navigate('/forgot-password')}
-                      sx={{ textTransform: 'none' }}
+                      sx={utilityButtonStyles}
+                      startIcon={<LockResetIcon sx={{ fontSize: 20 }} />}
                     >
-                      Forgot password?
+                      Reset Password
                     </Button>
                   </Box>
+
+                  <Divider sx={{ my: 2 }}>
+                    <Typography variant="body2" color="text.secondary">
+                      or
+                    </Typography>
+                  </Divider>
+
                   <Button
                     fullWidth
                     variant="outlined"
                     onClick={() => setShowRegister(true)}
-                    sx={{ mt: 1 }}
+                    sx={{ ...outlinedButtonStyles, mb: 1 }}
                   >
                     Create Account
                   </Button>
@@ -340,7 +396,7 @@ const Login = () => {
                       setShowTestSignup(true);
                       setIsTestUser(true);
                     }}
-                    sx={{ mt: 1 }}
+                    sx={outlinedButtonStyles}
                   >
                     Create Test Account
                   </Button>
@@ -352,7 +408,7 @@ const Login = () => {
                     fullWidth
                     variant="contained"
                     color="warning"
-                    sx={{ mt: 3, mb: 2 }}
+                    sx={{ ...buttonStyles, mt: 3, mb: 2 }}
                   >
                     Create Test Account
                   </Button>
@@ -363,7 +419,7 @@ const Login = () => {
                       setShowTestSignup(false);
                       setIsTestUser(false);
                     }}
-                    sx={{ mt: 1 }}
+                    sx={{ ...outlinedButtonStyles, mt: 1 }}
                   >
                     Back to Login
                   </Button>
