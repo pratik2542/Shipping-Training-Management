@@ -101,6 +101,7 @@ export const theme = createTheme({
       textTransform: 'none',
       fontWeight: 500,
       fontSize: '1rem',
+      fontFamily: "'Segoe UI', 'Roboto', 'Helvetica', sans-serif",
     },
     caption: {
       fontSize: '0.8rem',
@@ -132,12 +133,36 @@ export const theme = createTheme({
           textTransform: 'none',
           boxShadow: 'none',
           borderRadius: 4,
-          fontFamily: "'Arial', 'Helvetica', sans-serif",
+          fontFamily: "'Segoe UI', 'Roboto', 'Helvetica', sans-serif",
           fontWeight: 500,
           fontSize: '1rem',
+          letterSpacing: 'normal', // Adjust letter spacing for better text display
+          whiteSpace: 'nowrap', // Prevent text wrapping in buttons
+          wordBreak: 'keep-all', // Keep words together
           '&:hover': {
             boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.2)',
           },
+        },
+        sizeSmall: {
+          fontSize: '0.875rem',
+          padding: '4px 10px',
+        },
+        sizeMedium: {
+          fontSize: '1rem',
+          padding: '6px 16px',
+        },
+        sizeLarge: {
+          fontSize: '1.125rem',
+          padding: '8px 22px',
+        },
+        contained: {
+          fontWeight: 500,
+        },
+        outlined: {
+          fontWeight: 500,
+        },
+        text: {
+          fontWeight: 500,
         },
         containedPrimary: {
           '&:hover': {

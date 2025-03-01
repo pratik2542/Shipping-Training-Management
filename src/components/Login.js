@@ -73,7 +73,9 @@ const Login = () => {
       boxShadow: '0 4px 8px rgba(0,0,0,0.1)',
       transform: 'translateY(-2px)',
       transition: 'all 0.2s ease-in-out'
-    }
+    },
+    minWidth: 130, // Ensure enough width for text
+    whiteSpace: 'nowrap', // Prevent text wrapping
   };
 
   const sendAdminNotification = async (userData) => {
@@ -110,19 +112,66 @@ const Login = () => {
     if (isSubmitting) return; // Prevent multiple submissions
 
     setIsSubmitting(true); // Start loading
+    setError(''); // Clear previous errors
+
     try {
+      // First check if the email is already registered in Firebase
+      const apiKey = process.env.REACT_APP_FIREBASE_API_KEY || "AIzaSyBLAlnwwRasaBO88OsM8GsJ0os-8bwAT08";
+      const emailCheckEndpoint = `https://identitytoolkit.googleapis.com/v1/accounts:createAuthUri?key=${apiKey}`;
+      
+      const emailCheckResponse = await fetch(emailCheckEndpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          identifier: email,
+          continueUri: window.location.href
+        })
+      });
+      
+      const emailCheckData = await emailCheckResponse.json();
+      
+      // If the email exists in Firebase Auth, don't allow re-registration
+      if (emailCheckData.registered === true) {
+        setError('An account with this email already exists. Please log in instead.');
+        setIsSubmitting(false);
+        return;
+      }
+      
       // Check if user already has a pending request
       const existingRequestQuery = query(
         collection(db, 'userRequests'),
-        where('email', '==', email),
-        where('status', '==', 'pending')
+        where('email', '==', email)
       );
       
       const existingRequestDocs = await getDocs(existingRequestQuery);
+      
+      // Check if there's any request (pending, approved, or rejected)
       if (!existingRequestDocs.empty) {
-        alert('You already have a pending registration request.');
-        setIsSubmitting(false);
-        return;
+        // Find if there's an approved request
+        const approvedRequest = existingRequestDocs.docs.find(doc => 
+          doc.data().status === 'approved'
+        );
+        
+        // Find if there's a pending request
+        const pendingRequest = existingRequestDocs.docs.find(doc => 
+          doc.data().status === 'pending'
+        );
+        
+        if (approvedRequest) {
+          setError('This email is already registered and approved. Please log in instead.');
+          setIsSubmitting(false);
+          return;
+        }
+        
+        if (pendingRequest) {
+          setError('You already have a pending registration request. Please wait for approval.');
+          setIsSubmitting(false);
+          return;
+        }
+        
+        // If only rejected requests exist, allow to re-register
       }
 
       const userRequest = {
@@ -145,7 +194,6 @@ const Login = () => {
     } catch (error) {
       console.error('Registration failed:', error);
       setError(`Registration failed: ${error.message}`);
-      alert('Failed to submit registration. Please try again.');
     } finally {
       setIsSubmitting(false); // End loading
     }
@@ -165,14 +213,16 @@ const Login = () => {
 
       // Check if user is admin
       if (ADMIN_EMAILS.includes(email)) {
+        // Store admin email for later use in auth operations
+        localStorage.setItem('adminEmail', email);
+        localStorage.setItem('isAdmin', 'true');
+        
         // Check for pending requests
         const pendingQuery = query(
           collection(db, 'userRequests'),
           where('status', '==', 'pending')
         );
         const pendingSnapshot = await getDocs(pendingQuery);
-        
-        localStorage.setItem('isAdmin', 'true');
         
         // Only redirect to verify page if there are pending requests
         if (pendingSnapshot.size > 0) {
@@ -349,26 +399,32 @@ const Login = () => {
                     Sign In
                   </Button>
                   
-                  {/* Updated utility buttons container */}
+                  {/* Updated utility buttons container with adjusted spacing */}
                   <Box sx={{ 
                     display: 'flex', 
-                    gap: 2,
+                    justifyContent: 'space-between', // Use space-between instead of gap
                     mt: 3, 
                     mb: 3,
                     width: '100%'
                   }}>
                     <Button
-                      fullWidth
+                      sx={{
+                        ...utilityButtonStyles,
+                        flex: '1 1 45%', // Allocate proper space
+                        mr: 1 // Add margin right
+                      }}
                       onClick={() => navigate('/check-status')}
-                      sx={utilityButtonStyles}
                       startIcon={<SearchIcon sx={{ fontSize: 20 }} />}
                     >
                       Check Status
                     </Button>
                     <Button
-                      fullWidth
+                      sx={{
+                        ...utilityButtonStyles,
+                        flex: '1 1 45%', // Allocate proper space
+                        ml: 1 // Add margin left
+                      }}
                       onClick={() => navigate('/forgot-password')}
-                      sx={utilityButtonStyles}
                       startIcon={<LockResetIcon sx={{ fontSize: 20 }} />}
                     >
                       Reset Password

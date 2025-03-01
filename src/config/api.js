@@ -1,9 +1,9 @@
 const API_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://shipping-management.vercel.app/api'
-  : 'http://localhost:3000/api';
+  ? 'https://shipping-management.vercel.app'  // Production API URL
+  : 'http://localhost:5000/api/';  // Development API URL
 
 export const getApiUrl = (endpoint) => {
   const url = `${API_URL}${endpoint}`;
-  console.log('API Request:', { url, environment: process.env.NODE_ENV });
+  console.log('API Request to:', url); // Debug log
   return url;
 };

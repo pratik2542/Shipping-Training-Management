@@ -260,7 +260,8 @@ const Dashboard = () => {
             sx={{ 
               mb: 3, 
               color: 'secondary.main',
-              fontWeight: 600 
+              fontWeight: 600,
+              textAlign: 'center' 
             }}
           >
             Admin Controls
