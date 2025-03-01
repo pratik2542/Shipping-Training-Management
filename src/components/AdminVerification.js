@@ -24,7 +24,7 @@ import {
   DialogActions,
   CircularProgress
 } from '@mui/material';
-import { collection, query, getDocs, doc, updateDoc, orderBy } from 'firebase/firestore';
+import { collection, query, getDocs, doc, updateDoc, orderBy, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useNavigate } from 'react-router-dom';
 import SearchIcon from '@mui/icons-material/Search';
@@ -35,8 +35,10 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import HomeIcon from '@mui/icons-material/Home';
+import DeleteIcon from '@mui/icons-material/Delete';
 import { useTheme, useMediaQuery } from '@mui/material';
 import { sendApprovalEmail } from '../utils/emailService';
+import { createUser, verifyPassword } from '../utils/firebaseAuthApi';
 
 const AdminVerification = () => {
   const [requests, setRequests] = useState([]);
@@ -48,7 +50,8 @@ const AdminVerification = () => {
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [confirmError, setConfirmError] = useState('');
-  const [userToApprove, setUserToApprove] = useState(null);
+  const [userToAction, setUserToAction] = useState(null);
+  const [actionType, setActionType] = useState(null); // 'approve', 'reject', or 'delete'
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -103,8 +106,9 @@ const AdminVerification = () => {
     }
   };
 
-  const initiateUserApproval = (request) => {
-    setUserToApprove(request);
+  const initiateUserAction = (request, action) => {
+    setUserToAction(request);
+    setActionType(action || 'process'); // Default to 'process' if no action specified
     setConfirmError('');
     setConfirmDialogOpen(true);
   };
@@ -120,38 +124,20 @@ const AdminVerification = () => {
       
       if (action === 'approve') {
         try {
-          // Instead of using Auth SDK directly which affects the current session,
-          // we'll use the Firebase Authentication REST API
+          const tempPassword = 'tempPassword123';
           
-          // Get API key from Firebase config
-          const firebaseConfig = {
-            apiKey: process.env.REACT_APP_FIREBASE_API_KEY || "AIzaSyBLAlnwwRasaBO88OsM8GsJ0os-8bwAT08",
-            // ...other config values
-          };
-          
-          const API_KEY = firebaseConfig.apiKey;
-          const tempPassword = 'tempPassword123'; // Default temp password
-          
-          // Create user with email/password using REST API
-          const createUserEndpoint = `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${API_KEY}`;
-          const createUserOptions = {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              email: request.email,
-              password: tempPassword,
-              returnSecureToken: false
-            })
-          };
-          
+          // Use the secure API helper
           try {
-            await fetch(createUserEndpoint, createUserOptions);
+            await createUser(request.email, tempPassword);
             console.log('User created successfully');
           } catch (error) {
             console.log('User might already exist, continuing with approval');
           }
           
-          // Instead of sending Firebase reset email, send our custom email with EmailJS
+          // Send reset email using the helper
+          //await sendPasswordReset(request.email);
+          
+          // Send custom welcome email
           await sendApprovalEmail(request, tempPassword);
           
           // Update request status in Firestore
@@ -160,10 +146,8 @@ const AdminVerification = () => {
             approvedAt: new Date().toISOString()
           });
           
-          // Refresh the list
           fetchRequests();
           alert(`User ${request.email} approved and welcome email sent.`);
-          
         } catch (error) {
           console.error('Error during user approval:', error);
           throw error;
@@ -176,16 +160,21 @@ const AdminVerification = () => {
         
         fetchRequests();
         alert(`User ${request.email} rejected.`);
+      } else if (action === 'delete') {
+        // Delete the document from Firestore
+        await deleteDoc(requestRef);
+        fetchRequests();
+        alert(`User ${request.email} deleted.`);
       }
     } catch (error) {
-      console.error('Error updating user status:', error);
+      console.error(`Error during user ${action}:`, error);
       alert(`Error: ${error.message}`);
     }
   };
 
   // Also update the handleConfirmApproval function to use the REST API for authentication
-  const handleConfirmApproval = async (password) => {
-    if (!userToApprove || !password) return;
+  const handleConfirmAction = async (password) => {
+    if (!userToAction || !password || !actionType) return;
     
     setConfirmLoading(true);
     setConfirmError('');
@@ -197,41 +186,19 @@ const AdminVerification = () => {
         throw new Error('Admin session not found. Please log in again.');
       }
       
-      // Get API key from config
-      const firebaseConfig = {
-        apiKey: process.env.REACT_APP_FIREBASE_API_KEY || "AIzaSyBLAlnwwRasaBO88OsM8GsJ0os-8bwAT08",
-        // ...other config values
-      };
-      
-      const API_KEY = firebaseConfig.apiKey;
-      
-      // Verify admin password using REST API
       try {
-        const verifyEndpoint = `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${API_KEY}`;
-        const verifyOptions = {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: adminEmail,
-            password: password,
-            returnSecureToken: true
-          })
-        };
+        // Use the secure API helper for verification
+        const result = await verifyPassword(adminEmail, password);
         
-        const response = await fetch(verifyEndpoint, verifyOptions);
-        const data = await response.json();
-        
-        if (data.error) {
-          console.error('Authentication error:', data.error);
-          setConfirmError(data.error.message);
+        if (result.error) {
+          setConfirmError(result.error.message || 'Invalid password');
           setConfirmLoading(false);
           return;
         }
         
         // Successfully authenticated - proceed with approval
-        await handleUserAction(userToApprove, 'approve');
+        await handleUserAction(userToAction, actionType);
         setConfirmDialogOpen(false);
-        
       } catch (error) {
         console.error('Authentication error:', error);
         setConfirmError('Authentication failed. Please try again.');
@@ -341,7 +308,7 @@ const AdminVerification = () => {
             color="primary"
             size="small"
             sx={{ flex: 1, mr: 1 }}
-            onClick={() => initiateUserApproval(request)}
+            onClick={() => initiateUserAction(request, 'approve')}
           >
             Approve
           </Button>
@@ -350,22 +317,31 @@ const AdminVerification = () => {
             color="error"
             size="small"
             sx={{ flex: 1, ml: 1 }}
-            onClick={() => handleUserAction(request, 'reject')}
+            onClick={() => initiateUserAction(request, 'reject')}
           >
             Reject
           </Button>
         </Box>
       )}
       
-      <Button
-        variant="text"
-        fullWidth
-        onClick={() => openUserDetails(request)}
-        sx={{ mt: 1 }}
-        endIcon={<MoreVertIcon />}
-      >
-        View Details
-      </Button>
+      <Box sx={{ display: 'flex', mt: 2, gap: 1 }}>
+        <Button
+          variant="text"
+          fullWidth
+          onClick={() => openUserDetails(request)}
+          endIcon={<MoreVertIcon />}
+        >
+          View Details
+        </Button>
+        <Button
+          variant="text"
+          color="error"
+          onClick={() => initiateUserAction(request, 'delete')}
+          startIcon={<DeleteIcon />}
+        >
+          Delete
+        </Button>
+      </Box>
     </Paper>
   );
   
@@ -416,7 +392,7 @@ const AdminVerification = () => {
               color="primary"
               size="small"
               sx={{ mr: 1 }}
-              onClick={() => initiateUserApproval(request)}
+              onClick={() => initiateUserAction(request, 'approve')}
             >
               Approve
             </Button>
@@ -424,7 +400,7 @@ const AdminVerification = () => {
               variant="outlined"
               color="error"
               size="small"
-              onClick={() => handleUserAction(request, 'reject')}
+              onClick={() => initiateUserAction(request, 'reject')}
             >
               Reject
             </Button>
@@ -433,10 +409,20 @@ const AdminVerification = () => {
         <Button
           variant="text"
           size="small"
-          sx={{ ml: 1 }}
+          sx={{ ml: request.status === 'pending' ? 1 : 0 }}
           onClick={() => openUserDetails(request)}
         >
           Details
+        </Button>
+        <Button
+          variant="text"
+          color="error"
+          size="small"
+          sx={{ ml: 1 }}
+          onClick={() => initiateUserAction(request, 'delete')}
+          startIcon={<DeleteIcon />}
+        >
+          Delete
         </Button>
       </TableCell>
     </TableRow>
@@ -560,7 +546,7 @@ const AdminVerification = () => {
                   color="primary"
                   onClick={() => {
                     setDialogOpen(false);
-                    initiateUserApproval(selectedUser);
+                    initiateUserAction(selectedUser, 'approve');
                   }}
                   sx={{ flex: 1, mr: 1 }}
                 >
@@ -579,6 +565,19 @@ const AdminVerification = () => {
                 </Button>
               </Box>
             )}
+            <Box sx={{ mt: 2, display: 'flex', justifyContent: 'center' }}>
+              <Button
+                variant="text"
+                color="error"
+                startIcon={<DeleteIcon />}
+                onClick={() => {
+                  setDialogOpen(false);
+                  initiateUserAction(selectedUser, 'delete');
+                }}
+              >
+                Delete User
+              </Button>
+            </Box>
           </Box>
         )}
       </DialogContent>
@@ -611,18 +610,35 @@ const AdminVerification = () => {
         return () => clearTimeout(timer);
       }
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [confirmDialogOpen, actionType]);
   
     const handleConfirmClick = () => {
       if (!localPassword) return;
       // Use the local password state for validation
-      handleConfirmApproval(localPassword);
+      handleConfirmAction(localPassword);
     };
   
     const handleKeyDown = (e) => {
       if (e.key === 'Enter' && localPassword && !confirmLoading) {
         e.preventDefault();
         handleConfirmClick();
+      }
+    };
+
+    const getActionText = () => {
+      switch (actionType) {
+        case 'approve': return 'approve';
+        case 'reject': return 'reject';
+        case 'delete': return 'delete';
+        default: return 'process';
+      }
+    };
+
+    const getActionColor = () => {
+      switch (actionType) {
+        case 'approve': return 'primary';
+        case 'reject': case 'delete': return 'error';
+        default: return 'primary';
       }
     };
   
@@ -643,10 +659,10 @@ const AdminVerification = () => {
         </DialogTitle>
         <DialogContent sx={{ pt: 3, pb: 1 }}>
           <Typography variant="body1" sx={{ mb: 2 }}>
-            Please enter your password to approve:
+            Please enter your password to {getActionText()}:
           </Typography>
           <Typography variant="subtitle1" sx={{ mb: 3, fontWeight: 600 }}>
-            {userToApprove?.email}
+            {userToAction?.email}
           </Typography>
           <TextField
             inputRef={inputRef}
@@ -680,18 +696,18 @@ const AdminVerification = () => {
           </Button>
           <Button
             variant="contained"
-            color="primary"
+            color={getActionColor()}
             onClick={handleConfirmClick}
             disabled={!localPassword || confirmLoading}
-            sx={{ ml: 1, minWidth: '100px' }}
+            sx={{ ml: 1, minWidth: '120px' }}
           >
             {confirmLoading ? (
               <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                <CircularProgress size={20} sx={{ mr: 1 }} />
+                <CircularProgress size={20} sx={{ mr: 1, color: 'white' }} />
                 <span>Verifying</span>
               </Box>
             ) : (
-              'Approve'
+              `${(actionType || 'Confirm').charAt(0).toUpperCase() + (actionType || 'confirm').slice(1)}`
             )}
           </Button>
         </DialogActions>

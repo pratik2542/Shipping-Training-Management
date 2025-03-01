@@ -14,6 +14,7 @@ import CircularProgress from '@mui/material/CircularProgress';
 import { getApiUrl } from '../config/api';
 import SearchIcon from '@mui/icons-material/Search';
 import LockResetIcon from '@mui/icons-material/LockReset';
+import { verifyEmail } from '../utils/firebaseAuthApi';
 
 const ADMIN_EMAILS = ['pratikmak2542@gmail.com']; // Add your admin emails here
 
@@ -115,25 +116,10 @@ const Login = () => {
     setError(''); // Clear previous errors
 
     try {
-      // First check if the email is already registered in Firebase
-      const apiKey = process.env.REACT_APP_FIREBASE_API_KEY || "AIzaSyBLAlnwwRasaBO88OsM8GsJ0os-8bwAT08";
-      const emailCheckEndpoint = `https://identitytoolkit.googleapis.com/v1/accounts:createAuthUri?key=${apiKey}`;
+      // Check if email exists in Firebase Auth using the secure helper
+      const emailCheckResult = await verifyEmail(email);
       
-      const emailCheckResponse = await fetch(emailCheckEndpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          identifier: email,
-          continueUri: window.location.href
-        })
-      });
-      
-      const emailCheckData = await emailCheckResponse.json();
-      
-      // If the email exists in Firebase Auth, don't allow re-registration
-      if (emailCheckData.registered === true) {
+      if (emailCheckResult.registered === true) {
         setError('An account with this email already exists. Please log in instead.');
         setIsSubmitting(false);
         return;

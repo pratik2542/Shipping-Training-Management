@@ -81,7 +81,7 @@ const PendingStatus = () => {
       case 'rejected':
         return {
           icon: <ErrorIcon sx={{ fontSize: 60, color: 'error.main' }} />,
-          message: 'Your registration request was not approved. Please contact support.',
+          message: `Your registration request for ${email} was not approved before. If it rejects this time, contact support at pratikmak2542@gmail.com.`,
           color: 'error.main'
         };
       default:
