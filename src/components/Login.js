@@ -197,8 +197,11 @@ const Login = () => {
         return;
       }
 
-      // Check if user is admin
-      if (ADMIN_EMAILS.includes(email)) {
+      // Check if user is admin - use case-insensitive comparison
+      const normalizedEmail = email.toLowerCase();
+      const normalizedAdminEmails = ADMIN_EMAILS.map(email => email.toLowerCase());
+      
+      if (normalizedAdminEmails.includes(normalizedEmail)) {
         // Store admin email for later use in auth operations
         localStorage.setItem('adminEmail', email);
         localStorage.setItem('isAdmin', 'true');

@@ -7,6 +7,8 @@ import Box from '@mui/material/Box';
 import { auth } from './firebase/config';
 import { testAuth } from './firebase/testConfig';
 import { AdminRoute } from './utils/adminCheck';
+import ScrollToTop from './components/ScrollToTop'; // Add this import
+
 
 // Use lazy loading for routes
 const Login = React.lazy(() => import('./components/Login'));
@@ -57,6 +59,7 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <Router>
+        <ScrollToTop /> {/* Add this component here */}
         <Suspense fallback={<LoadingFallback />}>
           <Routes>
             <Route path="/" element={<Login />} />

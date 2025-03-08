@@ -410,6 +410,18 @@ const ShippingForm = () => {
     setCurrentSignatureField(null);
   };
 
+  // Add this function after handleSignatureSave
+  const handleRemoveSignature = (signatureField) => {
+    // Get corresponding date field
+    const dateField = signatureField.replace('Sign', 'Date');
+    
+    // Clear both signature and date
+    setFormData(prev => ({
+      ...prev,
+      [signatureField]: '',
+      [dateField]: ''
+    }));
+  };
 
   const canModifyField = (fieldName) => {
      if (!isEditMode) {
@@ -439,14 +451,25 @@ const ShippingForm = () => {
     }
   };
 
-  const qualifiedManufacturer = [
+  const [manufacturers, setManufacturers] = useState([
     'UPS',
     'Amazon',
     'Purolator',
     'Canada Post',
     'FedEx',
     'DHL'
-  ];
+  ]);
+  const [newManufacturer, setNewManufacturer] = useState('');
+  const [showAddManufacturer, setShowAddManufacturer] = useState(false);
+
+  const handleAddManufacturer = () => {
+    if (newManufacturer.trim() !== '' && !manufacturers.includes(newManufacturer.trim())) {
+      setManufacturers(prev => [...prev, newManufacturer.trim()]);
+      setFormData(prev => ({...prev, qualifiedManufacturer: newManufacturer.trim()}));
+      setNewManufacturer('');
+      setShowAddManufacturer(false);
+    }
+  };
 
   const unitOptions = [
     'KG',
@@ -455,12 +478,24 @@ const ShippingForm = () => {
   ];
 
   // Add vendor options array with the new values
-  const vendorOptions = [
+  const [vendorOptions, setVendorOptions] = useState([
     'Zomato',
     'Swiggy',
     'BlinkIt',
     'Zepto'
-  ];
+  ]);
+  const [newVendor, setNewVendor] = useState('');
+  const [showAddVendor, setShowAddVendor] = useState(false);
+
+  // Add this function near handleAddManufacturer
+  const handleAddVendor = () => {
+    if (newVendor.trim() !== '' && !vendorOptions.includes(newVendor.trim())) {
+      setVendorOptions(prev => [...prev, newVendor.trim()]);
+      setFormData(prev => ({...prev, vendor: newVendor.trim()}));
+      setNewVendor('');
+      setShowAddVendor(false);
+    }
+  };
 
   // Add new function to determine which sections to show
   const shouldShowSection = (section) => {
@@ -644,11 +679,51 @@ const ShippingForm = () => {
                     )
                   }
                 >
-                  {qualifiedManufacturer.map(option => (
+                  {manufacturers.map(option => (
                     <MenuItem key={option} value={option}>{option}</MenuItem>
                   ))}
+                  <MenuItem divider />
+                  <MenuItem 
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setShowAddManufacturer(true);
+                    }}
+                    sx={{
+                      color: 'primary.main',
+                      fontWeight: 'medium',
+                    }}
+                  >
+                    + Add Custom Manufacturer
+                  </MenuItem>
                 </Select>
               </FormControl>
+              
+              {/* Add custom manufacturer input */}
+              {showAddManufacturer && (
+                <Box sx={{ mt: 2, display: 'flex', gap: 1 }}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="New Manufacturer"
+                    value={newManufacturer}
+                    onChange={(e) => setNewManufacturer(e.target.value)}
+                    placeholder="Enter manufacturer name"
+                  />
+                  <Button 
+                    variant="contained" 
+                    onClick={handleAddManufacturer}
+                    sx={{ minWidth: '80px' }}
+                  >
+                    Add
+                  </Button>
+                  <Button 
+                    variant="outlined" 
+                    onClick={() => setShowAddManufacturer(false)}
+                  >
+                    Cancel
+                  </Button>
+                </Box>
+              )}
             </Grid>
 
             <Grid item xs={12} sm={6}>
@@ -675,8 +750,48 @@ const ShippingForm = () => {
                   {vendorOptions.map(option => (
                     <MenuItem key={option} value={option}>{option}</MenuItem>
                   ))}
+                  <MenuItem divider />
+                  <MenuItem 
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setShowAddVendor(true);
+                    }}
+                    sx={{
+                      color: 'primary.main',
+                      fontWeight: 'medium',
+                    }}
+                  >
+                    + Add Custom Vendor
+                  </MenuItem>
                 </Select>
               </FormControl>
+              
+              {/* Add custom vendor input */}
+              {showAddVendor && (
+                <Box sx={{ mt: 2, display: 'flex', gap: 1 }}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="New Vendor"
+                    value={newVendor}
+                    onChange={(e) => setNewVendor(e.target.value)}
+                    placeholder="Enter vendor name"
+                  />
+                  <Button 
+                    variant="contained" 
+                    onClick={handleAddVendor}
+                    sx={{ minWidth: '80px' }}
+                  >
+                    Add
+                  </Button>
+                  <Button 
+                    variant="outlined" 
+                    onClick={() => setShowAddVendor(false)}
+                  >
+                    Cancel
+                  </Button>
+                </Box>
+              )}
             </Grid>
 
             {/* Add transportation field after vendor field */}
@@ -834,25 +949,56 @@ const ShippingForm = () => {
                 </Grid>
 
                 <Grid item xs={12} sm={4}>
-                <Box sx={{ width: '100%', mt: -3 }}>
+                  <Box sx={{ width: '100%', mt: -3 }}>
                     <Typography variant="subtitle2" sx={{ marginBottom: '3px !important' }}>Receiver Signature</Typography>
                     {formData.receiverSign ? (
-                      <Box sx={{ border: '1px solid #ccc', p: 1, mb: 1 }}>
-                        <img 
-                          src={formData.receiverSign} 
-                          alt="Receiver Signature" 
-                          style={{ maxWidth: '100%', height: 'auto' }}
-                        />
-                      </Box>
-                    ) : null}
-                    {canModifyField('receiverSign') && (
-                      <Button
-                        variant="outlined"
-                        fullWidth
-                        onClick={() => handleSignatureClick('receiverSign')}
-                      >
-                        {formData.receiverSign ? 'Change Signature' : 'Add Signature'}
-                      </Button>
+                      <>
+                        <Box sx={{ border: '1px solid #ccc', p: 1, mb: 1 }}>
+                          <img 
+                            src={formData.receiverSign} 
+                            alt="Receiver Signature" 
+                            style={{ maxWidth: '100%', height: 'auto' }}
+                          />
+                        </Box>
+                        {canModifyField('receiverSign') && (
+                          <Box sx={{ 
+                            display: 'flex', 
+                            flexDirection: { xs: 'column', sm: 'row' }, // Stack vertically on mobile
+                            gap: 1
+                          }}>
+                            <Button
+                              variant="outlined"
+                              fullWidth
+                              onClick={() => handleSignatureClick('receiverSign')}
+                              sx={{ 
+                                fontSize: { xs: '0.75rem', sm: '0.875rem' }, // Smaller font on mobile
+                                py: 1 // Consistent padding
+                              }}
+                            >
+                              Change
+                            </Button>
+                            <Button
+                              variant="outlined"
+                              color="error"
+                              fullWidth
+                              onClick={() => handleRemoveSignature('receiverSign')}
+                              sx={{ py: 1 }} // Consistent padding
+                            >
+                              Remove
+                            </Button>
+                          </Box>
+                        )}
+                      </>
+                    ) : (
+                      canModifyField('receiverSign') && (
+                        <Button
+                          variant="outlined"
+                          fullWidth
+                          onClick={() => handleSignatureClick('receiverSign')}
+                        >
+                          Add Signature
+                        </Button>
+                      )
                     )}
                   </Box>
                 </Grid>
@@ -890,25 +1036,56 @@ const ShippingForm = () => {
                 </Grid>
 
                 <Grid item xs={12} sm={4}>
-                <Box sx={{ width: '100%', mt: -3 }}>
+                  <Box sx={{ width: '100%', mt: -3 }}>
                     <Typography variant="subtitle2" sx={{ marginBottom: '3px !important' }}>Inspector Signature</Typography>
                     {formData.inspectorSign ? (
-                      <Box sx={{ border: '1px solid #ccc', p: 1, mb: 1 }}>
-                        <img 
-                          src={formData.inspectorSign} 
-                          alt="Inspector Signature" 
-                          style={{ maxWidth: '100%', height: 'auto' }}
-                        />
-                      </Box>
-                    ) : null}
-                    {canModifyField('inspectorSign') && (
-                      <Button
-                        variant="outlined"
-                        fullWidth
-                        onClick={() => handleSignatureClick('inspectorSign')}
-                      >
-                        {formData.inspectorSign ? 'Change Signature' : 'Add Signature'}
-                      </Button>
+                      <>
+                        <Box sx={{ border: '1px solid #ccc', p: 1, mb: 1 }}>
+                          <img 
+                            src={formData.inspectorSign} 
+                            alt="Inspector Signature" 
+                            style={{ maxWidth: '100%', height: 'auto' }}
+                          />
+                        </Box>
+                        {canModifyField('inspectorSign') && (
+                          <Box sx={{ 
+                            display: 'flex', 
+                            flexDirection: { xs: 'column', sm: 'row' }, // Stack vertically on mobile
+                            gap: 1
+                          }}>
+                            <Button
+                              variant="outlined"
+                              fullWidth
+                              onClick={() => handleSignatureClick('inspectorSign')}
+                              sx={{ 
+                                fontSize: { xs: '0.75rem', sm: '0.875rem' }, // Smaller font on mobile
+                                py: 1 // Consistent padding
+                              }}
+                            >
+                              Change
+                            </Button>
+                            <Button
+                              variant="outlined"
+                              color="error"
+                              fullWidth
+                              onClick={() => handleRemoveSignature('inspectorSign')}
+                              sx={{ py: 1 }} // Consistent padding
+                            >
+                              Remove
+                            </Button>
+                          </Box>
+                        )}
+                      </>
+                    ) : (
+                      canModifyField('inspectorSign') && (
+                        <Button
+                          variant="outlined"
+                          fullWidth
+                          onClick={() => handleSignatureClick('inspectorSign')}
+                        >
+                          Add Signature
+                        </Button>
+                      )
                     )}
                   </Box>
                 </Grid>
@@ -949,22 +1126,53 @@ const ShippingForm = () => {
                 <Box sx={{ width: '100%', mt: -3 }}>    
                     <Typography variant="subtitle2" sx={{ marginBottom: '3px !important' }}>Approver Signature</Typography>
                     {formData.approverSign ? (
-                      <Box sx={{ border: '1px solid #ccc', p: 1, mb: 1 }}>
-                        <img 
-                          src={formData.approverSign} 
-                          alt="Approver Signature" 
-                          style={{ maxWidth: '100%', height: 'auto' }}
-                        />
-                      </Box>
-                    ) : null}
-                    {canModifyField('approverSign') && (
-                      <Button
-                        variant="outlined"
-                        fullWidth
-                        onClick={() => handleSignatureClick('approverSign')}
-                      >
-                        {formData.approverSign ? 'Change Signature' : 'Add Signature'}
-                      </Button>
+                      <>
+                        <Box sx={{ border: '1px solid #ccc', p: 1, mb: 1 }}>
+                          <img 
+                            src={formData.approverSign} 
+                            alt="Approver Signature" 
+                            style={{ maxWidth: '100%', height: 'auto' }}
+                          />
+                        </Box>
+                        {canModifyField('approverSign') && (
+                          <Box sx={{ 
+                            display: 'flex', 
+                            flexDirection: { xs: 'column', sm: 'row' }, // Stack vertically on mobile
+                            gap: 1
+                          }}>
+                            <Button
+                              variant="outlined"
+                              fullWidth
+                              onClick={() => handleSignatureClick('approverSign')}
+                              sx={{ 
+                                fontSize: { xs: '0.75rem', sm: '0.875rem' }, // Smaller font on mobile
+                                py: 1 // Consistent padding
+                              }}
+                            >
+                              Change
+                            </Button>
+                            <Button
+                              variant="outlined"
+                              color="error"
+                              fullWidth
+                              onClick={() => handleRemoveSignature('approverSign')}
+                              sx={{ py: 1 }} // Consistent padding
+                            >
+                              Remove
+                            </Button>
+                          </Box>
+                        )}
+                      </>
+                    ) : (
+                      canModifyField('approverSign') && (
+                        <Button
+                          variant="outlined"
+                          fullWidth
+                          onClick={() => handleSignatureClick('approverSign')}
+                        >
+                          Add Signature
+                        </Button>
+                      )
                     )}
                   </Box>
                 </Grid>
