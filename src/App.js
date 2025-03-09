@@ -8,7 +8,8 @@ import { auth } from './firebase/config';
 import { testAuth } from './firebase/testConfig';
 import { AdminRoute } from './utils/adminCheck';
 import ScrollToTop from './components/ScrollToTop';
-import SessionTimeoutProvider from './components/SessionTimeoutProvider'; // Add this import
+import SessionTimeoutProvider from './components/SessionTimeoutProvider';
+import { initializeItemMasterData } from './utils/itemMasterData';
 
 // Use lazy loading for routes
 const Login = React.lazy(() => import('./components/Login'));
@@ -26,12 +27,18 @@ const PasswordReset = React.lazy(() => import('./components/PasswordReset'));
 const PendingStatus = React.lazy(() => import('./components/PendingStatus'));
 const ForgotPassword = React.lazy(() => import('./components/ForgotPassword'));
 const CheckStatus = React.lazy(() => import('./components/CheckStatus'));
-// Import other form components...
+const ItemMasterTable = React.lazy(() => import('./components/ItemMasterTable'));
 
 function App() {
   // Add error logging
   React.useEffect(() => {
     console.log('App mounted');
+    
+    // Initialize item master data
+    initializeItemMasterData().catch(err => {
+      console.error('Error initializing item data:', err);
+    });
+    
     // Log any Firebase initialization errors
     if (window.fbError) {
       console.error('Firebase initialization error:', window.fbError);
@@ -163,6 +170,14 @@ function App() {
                 <AdminRoute>
                   <AdminVerification />
                 </AdminRoute>
+              }
+            />
+            <Route
+              path="/item-master"
+              element={
+                <ProtectedRoute>
+                  <ItemMasterTable />
+                </ProtectedRoute>
               }
             />
           </Routes>

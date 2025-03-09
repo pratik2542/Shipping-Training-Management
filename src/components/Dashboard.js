@@ -6,6 +6,7 @@ import ListAltIcon from '@mui/icons-material/ListAlt';
 import LogoutIcon from '@mui/icons-material/Logout';
 import ScienceIcon from '@mui/icons-material/Science';
 import SupervisorAccountIcon from '@mui/icons-material/SupervisorAccount';
+import InventoryIcon from '@mui/icons-material/Inventory';
 import { signOut } from 'firebase/auth';
 import { collection, getDocs, deleteDoc, query, where } from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
@@ -75,20 +76,32 @@ const Dashboard = () => {
 
   const cleanupTestData = async () => {
     try {
-      // Get all documents from test_shipments collection
-      const querySnapshot = await getDocs(collection(testDb, 'test_shipments'));
+      console.log('Starting test data cleanup...');
       
-      // Delete each document
-      const deletePromises = querySnapshot.docs.map(doc => deleteDoc(doc.ref));
-      await Promise.all(deletePromises);
+      // 1. Delete test_shipments documents
+      const shipmentSnapshot = await getDocs(collection(testDb, 'test_shipments'));
+      console.log(`Found ${shipmentSnapshot.size} test shipment records to delete`);
+      
+      const shipmentPromises = shipmentSnapshot.docs.map(doc => deleteDoc(doc.ref));
+      await Promise.all(shipmentPromises);
+      console.log('Test shipment data deleted');
+      
+      // 2. Delete test_item_master documents
+      const itemSnapshot = await getDocs(collection(testDb, 'test_item_master'));
+      console.log(`Found ${itemSnapshot.size} test item records to delete`);
+      
+      const itemPromises = itemSnapshot.docs.map(doc => deleteDoc(doc.ref));
+      await Promise.all(itemPromises);
+      console.log('Test item master data deleted');
 
-      // Delete test user account
+      // 3. Delete test user account
       const user = testAuth.currentUser;
       if (user) {
         await user.delete();
+        console.log('Test user account deleted');
       }
       
-      console.log('Test data cleanup completed');
+      console.log('Test data cleanup completed successfully');
     } catch (error) {
       console.error('Error cleaning up test data:', error);
     }
@@ -253,7 +266,7 @@ const Dashboard = () => {
           </Button>
         </Paper>
       </Box>
-      {isAdmin && (
+      {isAdmin || localStorage.getItem('isTestUser') === 'true' ? (
         <Box sx={{ mt: 4 }}>
           <Typography 
             variant="h5" 
@@ -264,8 +277,55 @@ const Dashboard = () => {
               textAlign: 'center' 
             }}
           >
-            Admin Controls
+            {isAdmin ? 'Admin Controls' : 'Additional Features'}
           </Typography>
+          
+          {/* Only show User Verification for actual admin */}
+          {isAdmin && (
+            <Paper
+              elevation={3}
+              sx={{
+                p: 3,
+                textAlign: 'center',
+                transition: 'transform 0.2s',
+                '&:hover': {
+                  transform: 'translateY(-4px)',
+                },
+                backgroundColor: 'secondary.light',
+                mb: 3
+              }}
+            >
+              <SupervisorAccountIcon sx={{ fontSize: 60, color: 'secondary.main', mb: 2 }} />
+              <Typography variant="h6" sx={{ mb: 2, color: 'white' }}>
+                User Verification
+                {pendingCount > 0 && (
+                  <Badge 
+                    badgeContent={pendingCount} 
+                    color="error" 
+                    sx={{ ml: 2 }}
+                  />
+                )}
+              </Typography>
+              <Button
+                variant="contained"
+                size="large"
+                fullWidth
+                onClick={() => navigate('/admin/verify')}
+                sx={{ 
+                  mt: 2,
+                  backgroundColor: 'secondary.dark',
+                  '&:hover': {
+                    backgroundColor: 'secondary.main',
+                  }
+                }}
+              >
+                Manage Users
+                {pendingCount > 0 && ` (${pendingCount} Pending)`}
+              </Button>
+            </Paper>
+          )}
+          
+          {/* Show Item Master for both admin and test users */}
           <Paper
             elevation={3}
             sx={{
@@ -275,39 +335,31 @@ const Dashboard = () => {
               '&:hover': {
                 transform: 'translateY(-4px)',
               },
-              backgroundColor: 'secondary.light',
+              backgroundColor: '#f0f7ff',
             }}
           >
-            <SupervisorAccountIcon sx={{ fontSize: 60, color: 'secondary.main', mb: 2 }} />
-            <Typography variant="h6" sx={{ mb: 2, color: 'white' }}>
-              User Verification
-              {pendingCount > 0 && (
-                <Badge 
-                  badgeContent={pendingCount} 
-                  color="error" 
-                  sx={{ ml: 2 }}
-                />
-              )}
+            <InventoryIcon sx={{ fontSize: 60, color: 'primary.dark', mb: 2 }} />
+            <Typography variant="h6" sx={{ mb: 2 }}>
+              Item Master Data
             </Typography>
             <Button
               variant="contained"
               size="large"
               fullWidth
-              onClick={() => navigate('/admin/verify')}
+              onClick={() => navigate('/item-master')}
               sx={{ 
                 mt: 2,
-                backgroundColor: 'secondary.dark',
+                backgroundColor: 'primary.main',
                 '&:hover': {
-                  backgroundColor: 'secondary.main',
+                  backgroundColor: 'primary.dark',
                 }
               }}
             >
-              Manage Users
-              {pendingCount > 0 && ` (${pendingCount} Pending)`}
+              Manage Items
             </Button>
           </Paper>
         </Box>
-      )}
+      ) : null}
     </Container>
   );
 };

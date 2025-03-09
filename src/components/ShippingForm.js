@@ -12,6 +12,8 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  Autocomplete,
+  InputAdornment
 } from '@mui/material';
 import { collection, addDoc, doc, getDoc, updateDoc, query, orderBy, limit, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -20,6 +22,8 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import SignaturePad from 'react-signature-canvas';
 import { MenuItem, FormControl, InputLabel, Select, FormControlLabel, Checkbox, IconButton } from '@mui/material';
 import ClearIcon from '@mui/icons-material/Clear';
+import SearchIcon from '@mui/icons-material/Search';
+import { getAllItems } from '../utils/itemMasterData';
 
 const SignatureDialog = ({ open, onClose, onSave, title }) => {
   const sigPadRef = useRef(null);
@@ -113,6 +117,7 @@ const ShippingForm = () => {
   const [signatureDialogOpen, setSignatureDialogOpen] = useState(false);
   const [currentSignatureField, setCurrentSignatureField] = useState('');
   const [recordFromDatabase, setRecordFromDatabase] = useState(null);
+  const [itemOptions, setItemOptions] = useState([]);
 
   const getDbInstance = () => {
     const isTestUser = localStorage.getItem('isTestUser') === 'true';
@@ -246,6 +251,14 @@ const ShippingForm = () => {
     };
 
     loadExistingRecord();
+
+    // Add new code to load item data
+    const loadItemOptions = async () => {
+      const items = await getAllItems();
+      setItemOptions(items);
+    };
+    
+    loadItemOptions();
   }, [location.search, navigate]);
 
   const handleSubmit = async (e) => {
@@ -471,23 +484,6 @@ const ShippingForm = () => {
     }
   };
 
-  const [unitOptions, setUnitOptions] = useState([
-    'KG',
-    'EA',
-    'Cylinder'
-  ]);
-  const [newUnit, setNewUnit] = useState('');
-  const [showAddUnit, setShowAddUnit] = useState(false);
-
-  const handleAddUnit = () => {
-    if (newUnit.trim() !== '' && !unitOptions.includes(newUnit.trim())) {
-      setUnitOptions(prev => [...prev, newUnit.trim()]);
-      setFormData(prev => ({...prev, unit: newUnit.trim()}));
-      setNewUnit('');
-      setShowAddUnit(false);
-    }
-  };
-
   // Add vendor options array with the new values
   const [vendorOptions, setVendorOptions] = useState([
     'Zomato',
@@ -624,13 +620,72 @@ const ShippingForm = () => {
 
             {/* Item Details */}
             <Grid item xs={12} sm={6}>
-              <TextField
+              <Autocomplete
+                id="item-select"
+                options={itemOptions}
+                autoHighlight
+                getOptionLabel={(option) => {
+                  if (typeof option === 'string') return option;
+                  return `${option.item_no} - ${option.item_name}`;
+                }}
+                isOptionEqualToValue={(option, value) => {
+                  // Handle different formats of value
+                  if (typeof value === 'string') {
+                    return option.item_no === value;
+                  }
+                  return option.item_no === value.item_no;
+                }}
+                renderOption={(props, option) => (
+                  <Box component="li" {...props}>
+                    <Box>
+                      <Typography variant="body1">
+                        {option.item_no} - {option.item_name}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        UOM: {option.UOM}
+                      </Typography>
+                    </Box>
+                  </Box>
+                )}
+                value={formData.itemNo ? itemOptions.find(item => item.item_no === formData.itemNo) || null : null}
+                onChange={(_, newValue) => {
+                  // Handle selection
+                  if (newValue) {
+                    setFormData(prev => ({
+                      ...prev,
+                      itemNo: newValue.item_no,
+                      itemName: newValue.item_name,
+                      unit: newValue.UOM
+                    }));
+                  } else {
+                    setFormData(prev => ({
+                      ...prev,
+                      itemNo: '',
+                      itemName: '',
+                      unit: ''
+                    }));
+                  }
+                }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    required
+                    label="Item Number/Name"
+                    placeholder="Search by Item Number or Name"
+                    InputProps={{
+                      ...params.InputProps,
+                      startAdornment: (
+                        <>
+                          <InputAdornment position="start">
+                            <SearchIcon />
+                          </InputAdornment>
+                          {params.InputProps.startAdornment}
+                        </>
+                      )
+                    }}
+                  />
+                )}
                 fullWidth
-                required
-                name="itemNo"
-                label="Item Number"
-                value={formData.itemNo}
-                onChange={handleChange}
               />
             </Grid>
 
@@ -642,6 +697,11 @@ const ShippingForm = () => {
                 label="Item Name"
                 value={formData.itemName}
                 onChange={handleChange}
+                InputProps={{
+                  readOnly: !!formData.itemNo, // Make readonly if itemNo is selected
+                }}
+                disabled={!formData.itemNo}
+                helperText={!formData.itemNo ? "Select an item number first" : ""}
               />
             </Grid>
 
@@ -844,71 +904,19 @@ const ShippingForm = () => {
             </Grid>
 
             <Grid item xs={12} sm={6}>
-              <FormControl fullWidth>
-                <InputLabel>Unit</InputLabel>
-                <Select
-                  name="unit"
-                  value={formData.unit}
-                  label="Unit"
-                  onChange={handleChange}
-                  required
-                  endAdornment={
-                    formData.unit && (
-                      <IconButton 
-                        size="small" 
-                        sx={{ mr: 4 }}
-                        onClick={() => setFormData(prev => ({ ...prev, unit: '' }))}
-                      >
-                        <ClearIcon fontSize="small" />
-                      </IconButton>
-                    )
-                  }
-                >
-                  {unitOptions.map(option => (
-                    <MenuItem key={option} value={option}>{option}</MenuItem>
-                  ))}
-                  <MenuItem divider />
-                  <MenuItem 
-                    onClick={(e) => {
-                      e.preventDefault();
-                      setShowAddUnit(true);
-                    }}
-                    sx={{
-                      color: 'primary.main',
-                      fontWeight: 'medium',
-                    }}
-                  >
-                    + Add Custom Unit
-                  </MenuItem>
-                </Select>
-              </FormControl>
-              
-              {/* Add custom unit input */}
-              {showAddUnit && (
-                <Box sx={{ mt: 2, display: 'flex', gap: 1 }}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="New Unit"
-                    value={newUnit}
-                    onChange={(e) => setNewUnit(e.target.value)}
-                    placeholder="Enter unit name"
-                  />
-                  <Button 
-                    variant="contained" 
-                    onClick={handleAddUnit}
-                    sx={{ minWidth: '80px' }}
-                  >
-                    Add
-                  </Button>
-                  <Button 
-                    variant="outlined" 
-                    onClick={() => setShowAddUnit(false)}
-                  >
-                    Cancel
-                  </Button>
-                </Box>
-              )}
+              <TextField
+                fullWidth
+                label="Unit"
+                name="unit"
+                value={formData.unit}
+                InputProps={{
+                  readOnly: !!formData.itemNo, // Make it read-only if itemNo is selected
+                }}
+                onChange={handleChange}
+                required
+                disabled={!formData.itemNo}
+                helperText={!formData.itemNo ? "Select an item number first" : formData.itemNo ? "Unit is automatically set from the selected item" : ""}
+              />
             </Grid>
 
             <Grid item xs={12} sm={6}>
