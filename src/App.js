@@ -7,8 +7,8 @@ import Box from '@mui/material/Box';
 import { auth } from './firebase/config';
 import { testAuth } from './firebase/testConfig';
 import { AdminRoute } from './utils/adminCheck';
-import ScrollToTop from './components/ScrollToTop'; // Add this import
-
+import ScrollToTop from './components/ScrollToTop';
+import SessionTimeoutProvider from './components/SessionTimeoutProvider'; // Add this import
 
 // Use lazy loading for routes
 const Login = React.lazy(() => import('./components/Login'));
@@ -41,7 +41,14 @@ function App() {
   const ProtectedRoute = ({ children }) => {
     const isTestUser = localStorage.getItem('isTestUser') === 'true';
     const authInstance = isTestUser ? testAuth : auth;
-    return authInstance.currentUser ? children : <Navigate to="/" />;
+    return authInstance.currentUser ? (
+      // Wrap protected routes with SessionTimeoutProvider
+      <SessionTimeoutProvider timeoutMinutes={15}>
+        {children}
+      </SessionTimeoutProvider>
+    ) : (
+      <Navigate to="/" />
+    );
   };
 
   // Loading component
@@ -59,10 +66,17 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <Router>
-        <ScrollToTop /> {/* Add this component here */}
+        <ScrollToTop />
         <Suspense fallback={<LoadingFallback />}>
           <Routes>
+            {/* Public routes */}
             <Route path="/" element={<Login />} />
+            <Route path="/reset-password" element={<PasswordReset />} />
+            <Route path="/pending-status" element={<PendingStatus />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/check-status" element={<CheckStatus />} />
+            
+            {/* Protected routes - already wrapped in ProtectedRoute */}
             <Route
               path="/dashboard"
               element={
@@ -151,11 +165,6 @@ function App() {
                 </AdminRoute>
               }
             />
-            <Route path="/reset-password" element={<PasswordReset />} />
-            <Route path="/pending-status" element={<PendingStatus />} />
-            <Route path="/forgot-password" element={<ForgotPassword />} />
-            <Route path="/check-status" element={<CheckStatus />} />
-            {/* Add similar routes for other forms */}
           </Routes>
         </Suspense>
       </Router>

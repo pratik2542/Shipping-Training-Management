@@ -471,11 +471,22 @@ const ShippingForm = () => {
     }
   };
 
-  const unitOptions = [
+  const [unitOptions, setUnitOptions] = useState([
     'KG',
     'EA',
     'Cylinder'
-  ];
+  ]);
+  const [newUnit, setNewUnit] = useState('');
+  const [showAddUnit, setShowAddUnit] = useState(false);
+
+  const handleAddUnit = () => {
+    if (newUnit.trim() !== '' && !unitOptions.includes(newUnit.trim())) {
+      setUnitOptions(prev => [...prev, newUnit.trim()]);
+      setFormData(prev => ({...prev, unit: newUnit.trim()}));
+      setNewUnit('');
+      setShowAddUnit(false);
+    }
+  };
 
   // Add vendor options array with the new values
   const [vendorOptions, setVendorOptions] = useState([
@@ -856,8 +867,48 @@ const ShippingForm = () => {
                   {unitOptions.map(option => (
                     <MenuItem key={option} value={option}>{option}</MenuItem>
                   ))}
+                  <MenuItem divider />
+                  <MenuItem 
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setShowAddUnit(true);
+                    }}
+                    sx={{
+                      color: 'primary.main',
+                      fontWeight: 'medium',
+                    }}
+                  >
+                    + Add Custom Unit
+                  </MenuItem>
                 </Select>
               </FormControl>
+              
+              {/* Add custom unit input */}
+              {showAddUnit && (
+                <Box sx={{ mt: 2, display: 'flex', gap: 1 }}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="New Unit"
+                    value={newUnit}
+                    onChange={(e) => setNewUnit(e.target.value)}
+                    placeholder="Enter unit name"
+                  />
+                  <Button 
+                    variant="contained" 
+                    onClick={handleAddUnit}
+                    sx={{ minWidth: '80px' }}
+                  >
+                    Add
+                  </Button>
+                  <Button 
+                    variant="outlined" 
+                    onClick={() => setShowAddUnit(false)}
+                  >
+                    Cancel
+                  </Button>
+                </Box>
+              )}
             </Grid>
 
             <Grid item xs={12} sm={6}>
