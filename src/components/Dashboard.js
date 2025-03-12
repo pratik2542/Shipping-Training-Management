@@ -1,57 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Button, Container, Paper, Typography, Badge, Snackbar, Alert } from '@mui/material';
+import { Box, Container, Paper, Typography, Badge, Snackbar, Alert, Button } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
-import ListAltIcon from '@mui/icons-material/ListAlt';
-import LogoutIcon from '@mui/icons-material/Logout';
 import ScienceIcon from '@mui/icons-material/Science';
 import SupervisorAccountIcon from '@mui/icons-material/SupervisorAccount';
 import InventoryIcon from '@mui/icons-material/Inventory';
-import { signOut } from 'firebase/auth';
-import { collection, getDocs, deleteDoc, query, where } from 'firebase/firestore';
-import { auth, db } from '../firebase/config';
-import { testAuth, testDb } from '../firebase/testConfig';
+import { collection, getDocs, query, where } from 'firebase/firestore';
+import { db } from '../firebase/config';
+import { isManager } from '../utils/userRoles';
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isUserManager, setIsUserManager] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [showNotification, setShowNotification] = useState(false);
-  const [userName, setUserName] = useState('');
 
   useEffect(() => {
-    const getUserName = async () => {
-      const isTestUser = localStorage.getItem('isTestUser') === 'true';
-      const user = isTestUser ? testAuth.currentUser : auth.currentUser;
-      
-      if (user) {
-        if (isTestUser) {
-          // For test users, just use their email as name
-          setUserName(user.email.split('@')[0]); // Gets username part of email
-        } else {
-          // For regular users, get name from userRequests
-          const userQuery = query(
-            collection(db, 'userRequests'),
-            where('email', '==', user.email),
-            where('status', '==', 'approved')
-          );
-          
-          try {
-            const querySnapshot = await getDocs(userQuery);
-            if (!querySnapshot.empty) {
-              const userData = querySnapshot.docs[0].data();
-              setUserName(userData.name || 'User');
-            }
-          } catch (error) {
-            console.error('Error fetching user name:', error);
-            setUserName('User');
-          }
-        }
-      }
-    };
-
-    getUserName();
-
     const checkAdminAndPending = async () => {
       const isTestUser = localStorage.getItem('isTestUser') === 'true';
       const storedAdmin = localStorage.getItem('isAdmin') === 'true';
@@ -69,87 +34,23 @@ const Dashboard = () => {
         setPendingCount(count);
         setShowNotification(count > 0);
       }
+      
+      // Check if the user is a manager
+      try {
+        const managerStatus = await isManager();
+        setIsUserManager(managerStatus);
+      } catch (error) {
+        console.error("Error checking manager status:", error);
+        setIsUserManager(false);
+      }
     };
     
     checkAdminAndPending();
   }, []);
 
-  const cleanupTestData = async () => {
-    try {
-      console.log('Starting test data cleanup...');
-      
-      // 1. Delete test_shipments documents
-      const shipmentSnapshot = await getDocs(collection(testDb, 'test_shipments'));
-      console.log(`Found ${shipmentSnapshot.size} test shipment records to delete`);
-      
-      const shipmentPromises = shipmentSnapshot.docs.map(doc => deleteDoc(doc.ref));
-      await Promise.all(shipmentPromises);
-      console.log('Test shipment data deleted');
-      
-      // 2. Delete test_item_master documents
-      const itemSnapshot = await getDocs(collection(testDb, 'test_item_master'));
-      console.log(`Found ${itemSnapshot.size} test item records to delete`);
-      
-      const itemPromises = itemSnapshot.docs.map(doc => deleteDoc(doc.ref));
-      await Promise.all(itemPromises);
-      console.log('Test item master data deleted');
-
-      // 3. Delete test user account
-      const user = testAuth.currentUser;
-      if (user) {
-        await user.delete();
-        console.log('Test user account deleted');
-      }
-      
-      console.log('Test data cleanup completed successfully');
-    } catch (error) {
-      console.error('Error cleaning up test data:', error);
-    }
-  };
-
-  const handleLogout = async () => {
-    try {
-      const isTestUser = localStorage.getItem('isTestUser') === 'true';
-      
-      if (isTestUser) {
-        // First clean up all test data
-        await cleanupTestData();
-        // Then sign out
-        await signOut(testAuth);
-      } else {
-        await signOut(auth);
-      }
-      
-      localStorage.removeItem('isTestUser');
-      navigate('/');
-    } catch (error) {
-      console.error('Error during logout:', error);
-      // Still try to navigate away even if there's an error
-      localStorage.removeItem('isTestUser');
-      navigate('/');
-    }
-  };
-
   return (
     <Container maxWidth="md">
-      <Box sx={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center',
-        mt: 2 
-      }}>
-        <Typography variant="h6" color="primary">
-          Welcome, {userName}
-        </Typography>
-        <Button
-          variant="outlined"
-          color="primary"
-          startIcon={<LogoutIcon />}
-          onClick={handleLogout}
-        >
-          Logout
-        </Button>
-      </Box>
+      {/* Remove welcome message and logout button */}
       <Typography 
         variant="h4" 
         component="h1" 
@@ -201,45 +102,20 @@ const Dashboard = () => {
         >
           <LocalShippingIcon sx={{ fontSize: 60, color: 'primary.main', mb: 2 }} />
           <Typography variant="h6" sx={{ mb: 2 }}>
-            Create New Shipment
+            Shipment
           </Typography>
           <Button
             variant="contained"
             size="large"
             fullWidth
-            onClick={() => navigate('/shipping-form')}
+            onClick={() => navigate('/shipment')}
             sx={{ mt: 2 }}
           >
-            Create Form
+            Manage Shipments
           </Button>
         </Paper>
 
-        <Paper
-          elevation={3}
-          sx={{
-            p: 3,
-            textAlign: 'center',
-            transition: 'transform 0.2s',
-            '&:hover': {
-              transform: 'translateY(-4px)',
-            },
-          }}
-        >
-          <ListAltIcon sx={{ fontSize: 60, color: 'primary.main', mb: 2 }} />
-          <Typography variant="h6" sx={{ mb: 2 }}>
-            View Shipments
-          </Typography>
-          <Button
-            variant="contained"
-            size="large"
-            fullWidth
-            onClick={() => navigate('/records')}
-            sx={{ mt: 2 }}
-          >
-            View Records
-          </Button>
-        </Paper>
-
+        {/* Remove the separate shipment and records cards and add Manufacturing and Item Master */}
         <Paper
           elevation={3}
           sx={{
@@ -265,14 +141,40 @@ const Dashboard = () => {
             Manufacturing
           </Button>
         </Paper>
+
+        <Paper
+          elevation={3}
+          sx={{
+            p: 3,
+            textAlign: 'center',
+            transition: 'transform 0.2s',
+            '&:hover': {
+              transform: 'translateY(-4px)',
+            },
+          }}
+        >
+          <InventoryIcon sx={{ fontSize: 60, color: 'primary.main', mb: 2 }} />
+          <Typography variant="h6" sx={{ mb: 2 }}>
+            Item Master Data
+          </Typography>
+          <Button
+            variant="contained"
+            size="large"
+            fullWidth
+            onClick={() => navigate('/item-master')}
+            sx={{ mt: 2 }}
+          >
+            Manage Items
+          </Button>
+        </Paper>
       </Box>
-      {isAdmin || localStorage.getItem('isTestUser') === 'true' ? (
+      {(isAdmin || localStorage.getItem('isTestUser') === 'true' || isUserManager) ? (
         <Box sx={{ mt: 4 }}>
           <Typography 
             variant="h5" 
             sx={{ 
               mb: 3, 
-              color: 'secondary.main',
+              color: 'primary.dark',
               fontWeight: 600,
               textAlign: 'center' 
             }}
@@ -291,12 +193,12 @@ const Dashboard = () => {
                 '&:hover': {
                   transform: 'translateY(-4px)',
                 },
-                backgroundColor: 'secondary.light',
+                backgroundColor: '#f0f7ff', // Light blue background instead of purple
                 mb: 3
               }}
             >
-              <SupervisorAccountIcon sx={{ fontSize: 60, color: 'secondary.main', mb: 2 }} />
-              <Typography variant="h6" sx={{ mb: 2, color: 'white' }}>
+              <SupervisorAccountIcon sx={{ fontSize: 60, color: 'primary.dark', mb: 2 }} />
+              <Typography variant="h6" sx={{ mb: 2, color: 'text.primary' }}> {/* Changed from white to text.primary */}
                 User Verification
                 {pendingCount > 0 && (
                   <Badge 
@@ -313,9 +215,9 @@ const Dashboard = () => {
                 onClick={() => navigate('/admin/verify')}
                 sx={{ 
                   mt: 2,
-                  backgroundColor: 'secondary.dark',
+                  backgroundColor: 'primary.main', // Changed from secondary.dark to primary.main
                   '&:hover': {
-                    backgroundColor: 'secondary.main',
+                    backgroundColor: 'primary.dark', // Changed to match primary theme
                   }
                 }}
               >
@@ -325,7 +227,7 @@ const Dashboard = () => {
             </Paper>
           )}
           
-          {/* Show Item Master for both admin and test users */}
+          {/* Show Item Master for both admin, test users, and managers */}
           <Paper
             elevation={3}
             sx={{

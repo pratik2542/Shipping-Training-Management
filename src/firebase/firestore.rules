@@ -9,13 +9,22 @@ service cloud.firestore {
       allow read, write: if request.auth != null;
     }
     
+    // New collection for storing manager emails
+    match /managers/{email} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && 
+        request.auth.token.email in ['pratikmak2542@gmail.com']; // Only admin can modify managers
+    }
+    
     // Updated rules for the item_master collections
     match /item_master/{document=**} {
       // Allow read for all authenticated users
       allow read: if request.auth != null;
-      // Allow write for admins and test users
+      // Allow write for admins, managers, and test users
       allow write: if request.auth != null && (
         request.auth.token.email in ['pratikmak2542@gmail.com'] || 
+        // Check if user is a manager
+        exists(/databases/$(database)/documents/managers/$(request.auth.token.email)) ||
         // Check if the user is a test user (from testAuth)
         exists(/databases/$(database)/documents/test_users/$(request.auth.uid))
       ); 

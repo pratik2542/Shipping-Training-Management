@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Button,
@@ -34,9 +34,9 @@ import { testDb } from '../firebase/testConfig';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import SearchIcon from '@mui/icons-material/Search';
+// eslint-disable-next-line no-unused-vars
 import { useNavigate } from 'react-router-dom';
 import { initializeItemMasterData } from '../utils/itemMasterData';
 import { importItemMasterData } from '../utils/importItemMasterData';
@@ -46,8 +46,11 @@ import CardContent from '@mui/material/CardContent';
 import CardActions from '@mui/material/CardActions';
 import Divider from '@mui/material/Divider';
 import Stack from '@mui/material/Stack';
+import { isAdmin, isManager } from '../utils/userRoles';
 
 const ItemMasterTable = () => {
+  // Keep navigate for potential future use, with eslint disable comment
+  // eslint-disable-next-line no-unused-vars
   const navigate = useNavigate();
   const [items, setItems] = useState([]);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -82,10 +85,37 @@ const ItemMasterTable = () => {
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const [userCanEdit, setUserCanEdit] = useState(false);
+
+  const fetchPermissions = useCallback(async () => {
+    try {
+      // Check if the user is a test user (they always have edit permissions)
+      const isTestUser = localStorage.getItem('isTestUser') === 'true';
+      
+      if (isTestUser) {
+        setUserCanEdit(true);
+        return;
+      }
+      
+      // Check if the user is an admin
+      if (isAdmin()) {
+        setUserCanEdit(true);
+        return;
+      }
+      
+      // Check if the user is a manager
+      const managerStatus = await isManager();
+      setUserCanEdit(managerStatus);
+    } catch (error) {
+      console.error("Error checking permissions:", error);
+      setUserCanEdit(false);
+    }
+  }, []);
 
   useEffect(() => {
     fetchItems();
-  }, []);
+    fetchPermissions();
+  }, [fetchPermissions]);
 
   const fetchItems = async () => {
     try {
@@ -412,52 +442,40 @@ const ItemMasterTable = () => {
           sx={{ 
             fontWeight: 600, 
             color: 'primary.main',
-            mb: isMobile ? 2 : 0,
             fontSize: isMobile ? '1.75rem' : '2.125rem' 
           }}
         >
           Item Master Data
         </Typography>
         
-        <Box sx={{ 
-          display: 'flex', 
-          flexDirection: isMobile ? 'column' : 'row',
-          width: isMobile ? '100%' : 'auto', 
-          gap: isMobile ? 1 : 0 
-        }}>
-          <Button
-            variant="outlined"
-            startIcon={<ArrowBackIcon />}
-            onClick={() => navigate('/dashboard')}
-            sx={{ 
-              mr: isMobile ? 0 : 2,
-              mb: isMobile ? 1 : 0,
-              width: isMobile ? '100%' : 'auto' 
-            }}
-          >
-            Back to Dashboard
-          </Button>
-          <Button
-            variant="outlined"
-            startIcon={<FileUploadIcon />}
-            onClick={() => setImportDialogOpen(true)}
-            sx={{ 
-              mr: isMobile ? 0 : 2,
-              mb: isMobile ? 1 : 0,
-              width: isMobile ? '100%' : 'auto' 
-            }}
-          >
-            Import Excel
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => handleOpenDialog()}
-            sx={{ width: isMobile ? '100%' : 'auto' }}
-          >
-            Add New Item
-          </Button>
-        </Box>
+        {/* Only show these buttons if user has edit permissions */}
+        {userCanEdit && (
+          <Box sx={{ 
+            display: 'flex', 
+            flexDirection: isMobile ? 'column' : 'row',
+            width: isMobile ? '100%' : 'auto', 
+            gap: isMobile ? 1 : 2 
+          }}>
+            <Button
+              variant="outlined"
+              startIcon={<FileUploadIcon />}
+              onClick={() => setImportDialogOpen(true)}
+              sx={{ 
+                width: isMobile ? '100%' : 'auto' 
+              }}
+            >
+              Import Excel
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => handleOpenDialog()}
+              sx={{ width: isMobile ? '100%' : 'auto' }}
+            >
+              Add New Item
+            </Button>
+          </Box>
+        )}
       </Box>
 
       <Box sx={{ mb: 3 }}>
@@ -528,23 +546,25 @@ const ItemMasterTable = () => {
                   </Stack>
                 </CardContent>
                 <Divider />
-                <CardActions sx={{ justifyContent: 'space-between', px: 2 }}>
-                  <Button
-                    size="small"
-                    startIcon={<EditIcon />}
-                    onClick={() => handleOpenDialog(item)}
-                  >
-                    Edit
-                  </Button>
-                  <Button
-                    size="small"
-                    color="error"
-                    startIcon={<DeleteIcon />}
-                    onClick={() => handleDeleteItem(item.id)}
-                  >
-                    Delete
-                  </Button>
-                </CardActions>
+                {userCanEdit && (
+                  <CardActions sx={{ justifyContent: 'space-between', px: 2 }}>
+                    <Button
+                      size="small"
+                      startIcon={<EditIcon />}
+                      onClick={() => handleOpenDialog(item)}
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      size="small"
+                      color="error"
+                      startIcon={<DeleteIcon />}
+                      onClick={() => handleDeleteItem(item.id)}
+                    >
+                      Delete
+                    </Button>
+                  </CardActions>
+                )}
               </Card>
             ))
           )}
@@ -558,13 +578,15 @@ const ItemMasterTable = () => {
                 <TableCell sx={{ color: 'white', fontWeight: 600 }}>Item Number</TableCell>
                 <TableCell sx={{ color: 'white', fontWeight: 600 }}>Item Name</TableCell>
                 <TableCell sx={{ color: 'white', fontWeight: 600 }}>UOM</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 600 }}>Actions</TableCell>
+                {userCanEdit && (
+                  <TableCell sx={{ color: 'white', fontWeight: 600 }}>Actions</TableCell>
+                )}
               </TableRow>
             </TableHead>
             <TableBody>
               {filteredItems.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} align="center" sx={{ py: 3 }}>
+                  <TableCell colSpan={userCanEdit ? 4 : 3} align="center" sx={{ py: 3 }}>
                     {items.length === 0 ? 'No items found' : 'No matching items found'}
                   </TableCell>
                 </TableRow>
@@ -574,21 +596,23 @@ const ItemMasterTable = () => {
                     <TableCell>{item.item_no}</TableCell>
                     <TableCell>{item.item_name}</TableCell>
                     <TableCell>{item.UOM}</TableCell>
-                    <TableCell>
-                      <IconButton 
-                        color="primary" 
-                        onClick={() => handleOpenDialog(item)}
-                        sx={{ mr: 1 }}
-                      >
-                        <EditIcon />
-                      </IconButton>
-                      <IconButton 
-                        color="error" 
-                        onClick={() => handleDeleteItem(item.id)}
-                      >
-                        <DeleteIcon />
-                      </IconButton>
-                    </TableCell>
+                    {userCanEdit && (
+                      <TableCell>
+                        <IconButton 
+                          color="primary" 
+                          onClick={() => handleOpenDialog(item)}
+                          sx={{ mr: 1 }}
+                        >
+                          <EditIcon />
+                        </IconButton>
+                        <IconButton 
+                          color="error" 
+                          onClick={() => handleDeleteItem(item.id)}
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))
               )}
@@ -597,138 +621,143 @@ const ItemMasterTable = () => {
         </TableContainer>
       )}
 
-      <Dialog open={dialogOpen} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
-        <DialogTitle>{editMode ? 'Edit Item' : 'Add New Item'}</DialogTitle>
-        <DialogContent>
-          <Box sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <TextField
-              name="item_no"
-              label="Item Number"
-              fullWidth
-              value={currentItem.item_no}
-              onChange={handleInputChange}
-              required
-            />
-            <TextField
-              name="item_name"
-              label="Item Name"
-              fullWidth
-              value={currentItem.item_name}
-              onChange={handleInputChange}
-              required
-            />
-            <FormControl fullWidth required>
-              <InputLabel>UOM (Unit of Measure)</InputLabel>
-              <Select
-                name="UOM"
-                value={currentItem.UOM}
-                onChange={handleInputChange}
-                label="UOM (Unit of Measure)"
-              >
-                {uomOptions.map((option) => (
-                  <MenuItem key={option} value={option}>
-                    {option}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Box>
-        </DialogContent>
-        <DialogActions sx={{ p: 3 }}>
-          <Button onClick={handleCloseDialog}>Cancel</Button>
-          <Button 
-            variant="contained" 
-            color="primary" 
-            onClick={handleSaveItem}
-          >
-            {editMode ? 'Update' : 'Save'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Import Dialog */}
-      <Dialog open={importDialogOpen} onClose={handleCloseImportDialog} maxWidth="sm" fullWidth>
-        <DialogTitle>Import Items from Excel</DialogTitle>
-        <DialogContent>
-          <Box sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 3 }}>
-            <Typography>
-              Upload an Excel file (.xlsx) with item data. The file should have columns for:
-            </Typography>
-            <Box sx={{ pl: 2 }}>
-              <Typography variant="body2">• item_no (Item Number)</Typography>
-              <Typography variant="body2">• item_name (Item Name)</Typography>
-              <Typography variant="body2">• UOM (Unit of Measure)</Typography>
-            </Box>
-            
-            <Box sx={{ mt: 2 }}>
-              <Button
-                variant="outlined"
-                component="label"
-                fullWidth
-                sx={{ 
-                  py: 3,
-                  borderStyle: 'dashed',
-                  bgcolor: 'background.default'
-                }}
-              >
-                {importFile ? importFile.name : 'Choose Excel File'}
-                <input
-                  type="file"
-                  hidden
-                  accept=".xlsx,.xls"
-                  onChange={handleFileChange}
-                  disabled={importLoading}
+      {/* Only render dialogs if user has edit permissions */}
+      {userCanEdit && (
+        <>
+          <Dialog open={dialogOpen} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
+            <DialogTitle>{editMode ? 'Edit Item' : 'Add New Item'}</DialogTitle>
+            <DialogContent>
+              <Box sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <TextField
+                  name="item_no"
+                  label="Item Number"
+                  fullWidth
+                  value={currentItem.item_no}
+                  onChange={handleInputChange}
+                  required
                 />
-              </Button>
-            </Box>
-            
-            <Typography variant="body2" color="text.secondary">
-              Or use one of these options:
-            </Typography>
-            
-            <Box sx={{ display: 'flex', gap: 2, justifyContent: 'space-between' }}>
-              <Button 
-                variant="outlined" 
-                onClick={handleInitializeData}
-                disabled={importLoading}
-                sx={{ flex: 1 }}
-              >
-                Initialize Default Data
-              </Button>
-              <Button 
-                variant="outlined" 
-                onClick={handleImportSampleData}
-                disabled={importLoading}
-                sx={{ flex: 1 }}
-              >
-                Import Sample Data
-              </Button>
-            </Box>
-            
-            {importLoading && (
-              <Box sx={{ display: 'flex', justifyContent: 'center', my: 2 }}>
-                <CircularProgress />
+                <TextField
+                  name="item_name"
+                  label="Item Name"
+                  fullWidth
+                  value={currentItem.item_name}
+                  onChange={handleInputChange}
+                  required
+                />
+                <FormControl fullWidth required>
+                  <InputLabel>UOM (Unit of Measure)</InputLabel>
+                  <Select
+                    name="UOM"
+                    value={currentItem.UOM}
+                    onChange={handleInputChange}
+                    label="UOM (Unit of Measure)"
+                  >
+                    {uomOptions.map((option) => (
+                      <MenuItem key={option} value={option}>
+                        {option}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
               </Box>
-            )}
-          </Box>
-        </DialogContent>
-        <DialogActions sx={{ p: 3 }}>
-          <Button 
-            onClick={handleCloseImportDialog}
-            disabled={importLoading}
-          >
-            Cancel
-          </Button>
-          <Button 
-            variant="contained" 
-            color="primary" 
-            onClick={handleImportFromExcel}
-            disabled={!importFile || importLoading}
-          >
-            {importLoading ? 'Importing...' : 'Import Data'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+            </DialogContent>
+            <DialogActions sx={{ p: 3 }}>
+              <Button onClick={handleCloseDialog}>Cancel</Button>
+              <Button 
+                variant="contained" 
+                color="primary" 
+                onClick={handleSaveItem}
+              >
+                {editMode ? 'Update' : 'Save'}
+              </Button>
+            </DialogActions>
+          </Dialog>
+
+          {/* Import Dialog */}
+          <Dialog open={importDialogOpen} onClose={handleCloseImportDialog} maxWidth="sm" fullWidth>
+            <DialogTitle>Import Items from Excel</DialogTitle>
+            <DialogContent>
+              <Box sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <Typography>
+                  Upload an Excel file (.xlsx) with item data. The file should have columns for:
+                </Typography>
+                <Box sx={{ pl: 2 }}>
+                  <Typography variant="body2">• item_no (Item Number)</Typography>
+                  <Typography variant="body2">• item_name (Item Name)</Typography>
+                  <Typography variant="body2">• UOM (Unit of Measure)</Typography>
+                </Box>
+                
+                <Box sx={{ mt: 2 }}>
+                  <Button
+                    variant="outlined"
+                    component="label"
+                    fullWidth
+                    sx={{ 
+                      py: 3,
+                      borderStyle: 'dashed',
+                      bgcolor: 'background.default'
+                    }}
+                  >
+                    {importFile ? importFile.name : 'Choose Excel File'}
+                    <input
+                      type="file"
+                      hidden
+                      accept=".xlsx,.xls"
+                      onChange={handleFileChange}
+                      disabled={importLoading}
+                    />
+                  </Button>
+                </Box>
+                
+                <Typography variant="body2" color="text.secondary">
+                  Or use one of these options:
+                </Typography>
+                
+                <Box sx={{ display: 'flex', gap: 2, justifyContent: 'space-between' }}>
+                  <Button 
+                    variant="outlined" 
+                    onClick={handleInitializeData}
+                    disabled={importLoading}
+                    sx={{ flex: 1 }}
+                  >
+                    Initialize Default Data
+                  </Button>
+                  <Button 
+                    variant="outlined" 
+                    onClick={handleImportSampleData}
+                    disabled={importLoading}
+                    sx={{ flex: 1 }}
+                  >
+                    Import Sample Data
+                  </Button>
+                </Box>
+                
+                {importLoading && (
+                  <Box sx={{ display: 'flex', justifyContent: 'center', my: 2 }}>
+                    <CircularProgress />
+                  </Box>
+                )}
+              </Box>
+            </DialogContent>
+            <DialogActions sx={{ p: 3 }}>
+              <Button 
+                onClick={handleCloseImportDialog}
+                disabled={importLoading}
+              >
+                Cancel
+              </Button>
+              <Button 
+                variant="contained" 
+                color="primary" 
+                onClick={handleImportFromExcel}
+                disabled={!importFile || importLoading}
+              >
+                {importLoading ? 'Importing...' : 'Import Data'}
+              </Button>
+            </DialogActions>
+          </Dialog>
+        </>
+      )}
 
       {/* Snackbar for notifications */}
       <Snackbar

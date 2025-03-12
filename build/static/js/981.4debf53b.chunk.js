@@ -1,1 +1,1 @@
-(self.webpackChunkddrops=self.webpackChunkddrops||[]).push([[981],{8981:()=>{}}]);
+(self.webpackChunkPM=self.webpackChunkPM||[]).push([[981],{8981:()=>{}}]);

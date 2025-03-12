@@ -20,19 +20,16 @@ import {
   Box,
 } from '@mui/material';
 import { collection, getDocs, deleteDoc, doc, query, orderBy } from 'firebase/firestore';
-import { db, auth } from '../firebase/config';
-import { testDb, testAuth } from '../firebase/testConfig';
+import { db } from '../firebase/config';
+import { testDb } from '../firebase/testConfig';
 import SearchIcon from '@mui/icons-material/Search';
 import EditIcon from '@mui/icons-material/Edit';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import { useNavigate } from 'react-router-dom';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
-import { generatePDF } from '../utils/pdfGenerator';
-import HomeIcon from '@mui/icons-material/Home';
-import LogoutIcon from '@mui/icons-material/Logout';
-import { signOut } from 'firebase/auth';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { useTheme, useMediaQuery } from '@mui/material';
+import { generatePDF } from '../utils/pdfGenerator';
 
 const Records = () => {
   const navigate = useNavigate();
@@ -122,50 +119,6 @@ const Records = () => {
     }
   };
 
-  const cleanupTestData = async () => {
-    try {
-      // Get all documents from test_shipments collection
-      const querySnapshot = await getDocs(collection(testDb, 'test_shipments'));
-      
-      // Delete each document
-      const deletePromises = querySnapshot.docs.map(doc => deleteDoc(doc.ref));
-      await Promise.all(deletePromises);
-
-      // Delete test user account
-      const user = testAuth.currentUser;
-      if (user) {
-        await user.delete();
-      }
-      
-      console.log('Test data cleanup completed');
-    } catch (error) {
-      console.error('Error cleaning up test data:', error);
-    }
-  };
-
-  const handleLogout = async () => {
-    try {
-      const isTestUser = localStorage.getItem('isTestUser') === 'true';
-      
-      if (isTestUser) {
-        // First clean up all test data
-        await cleanupTestData();
-        // Then sign out
-        await signOut(testAuth);
-      } else {
-        await signOut(auth);
-      }
-      
-      localStorage.removeItem('isTestUser');
-      navigate('/');
-    } catch (error) {
-      console.error('Error during logout:', error);
-      // Still try to navigate away even if there's an error
-      localStorage.removeItem('isTestUser');
-      navigate('/');
-    }
-  };
-
   const handleDelete = async (record) => {
     if (!isAdmin) return;
 
@@ -178,7 +131,6 @@ const Records = () => {
         // Refresh records list
         fetchRecords();
         alert('Record deleted successfully');
-        navigate('/dashboard');
       } catch (error) {
         console.error('Error deleting record:', error);
         alert('Error deleting record');
@@ -187,7 +139,7 @@ const Records = () => {
   };
 
   const filteredRecords = records.filter(record => {
-    const shipmentCode = record.shipmentCode || ''; // Change from dpNumber to shipmentCode
+    const shipmentCode = record.shipmentCode || '';
     const itemName = record.itemName || '';
     const searchTermLower = searchTerm.toLowerCase();
     
@@ -778,29 +730,7 @@ const Records = () => {
         >
           Shipping Records
         </Typography>
-        <Box sx={{ 
-          display: 'flex', 
-          flexDirection: isMobile ? 'row' : 'row',
-          gap: 2
-        }}>
-          <Button
-            variant="contained"
-            startIcon={<HomeIcon />}
-            onClick={() => navigate('/dashboard')}
-            sx={{ flex: isMobile ? 1 : 'inherit' }}
-          >
-            Home
-          </Button>
-          <Button
-            variant="outlined"
-            color="primary"
-            startIcon={<LogoutIcon />}
-            onClick={handleLogout}
-            sx={{ flex: isMobile ? 1 : 'inherit' }}
-          >
-            Logout
-          </Button>
-        </Box>
+        {/* Remove Home and Logout buttons */}
       </Box>
       
       <TextField

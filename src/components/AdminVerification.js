@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Container, 
   Paper, 
@@ -22,11 +22,14 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  CircularProgress
+  CircularProgress,
+  Snackbar,
+  Alert,
+  Autocomplete 
 } from '@mui/material';
-import { collection, query, getDocs, doc, updateDoc, orderBy, deleteDoc } from 'firebase/firestore';
+import { collection, query, getDocs, doc, updateDoc, orderBy, deleteDoc, where } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import SearchIcon from '@mui/icons-material/Search';
 import PersonIcon from '@mui/icons-material/Person';
 import EmailIcon from '@mui/icons-material/Email';
@@ -34,16 +37,16 @@ import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
-import HomeIcon from '@mui/icons-material/Home';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { useTheme, useMediaQuery } from '@mui/material';
 import { sendApprovalEmail } from '../utils/emailService';
 import { createUser, verifyPassword } from '../utils/firebaseAuthApi';
+import { addManager, removeManager, getAllManagers } from '../utils/userRoles';
 
 const AdminVerification = () => {
   const [requests, setRequests] = useState([]);
   const [filteredRequests, setFilteredRequests] = useState([]);
-  const [tabValue, setTabValue] = useState(0); // 0: Pending, 1: Approved, 2: Rejected
+  const [tabValue, setTabValue] = useState(0); // 0: Pending, 1: Approved, 2: Rejected, 3: Managers
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUser, setSelectedUser] = useState(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -52,38 +55,32 @@ const AdminVerification = () => {
   const [confirmError, setConfirmError] = useState('');
   const [userToAction, setUserToAction] = useState(null);
   const [actionType, setActionType] = useState(null); // 'approve', 'reject', or 'delete'
+  const [managers, setManagers] = useState([]);
+  const [newManagerEmail, setNewManagerEmail] = useState('');
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [snackbarSeverity, setSnackbarSeverity] = useState('info');
+  const [approvedUsers, setApprovedUsers] = useState([]);
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const location = useLocation();
 
-  useEffect(() => {
-    // Check if user is admin
-    const isAdmin = localStorage.getItem('isAdmin') === 'true';
-    if (!isAdmin) {
-      navigate('/dashboard');
-      return;
+  const fetchManagers = useCallback(async () => {
+    try {
+      const managersData = await getAllManagers();
+      setManagers(managersData);
+    } catch (error) {
+      console.error('Error fetching managers:', error);
+      showSnackbar('Error fetching managers', 'error');
     }
-    
-    fetchRequests();
-  }, [navigate]);
-
-  useEffect(() => {
-    // Filter requests based on search term and selected tab
-    const filtered = requests.filter(request => {
-      const matchesSearch = !searchTerm || 
-        request.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        request.email?.toLowerCase().includes(searchTerm.toLowerCase());
-        
-      const matchesTab = 
-        (tabValue === 0 && request.status === 'pending') || 
-        (tabValue === 1 && request.status === 'approved') ||
-        (tabValue === 2 && request.status === 'rejected');
-        
-      return matchesSearch && matchesTab;
-    });
-    
-    setFilteredRequests(filtered);
-  }, [requests, searchTerm, tabValue]);
+  }, []);
+  
+  const showSnackbar = (message, severity = 'info') => {
+    setSnackbarMessage(message);
+    setSnackbarSeverity(severity);
+    setSnackbarOpen(true);
+  };
 
   const fetchRequests = async () => {
     try {
@@ -106,17 +103,82 @@ const AdminVerification = () => {
     }
   };
 
+  // Define fetchApprovedUsers function to get all approved users
+  const fetchApprovedUsers = useCallback(async () => {
+    try {
+      const q = query(
+        collection(db, 'userRequests'),
+        where('status', '==', 'approved')
+      );
+      const snapshot = await getDocs(q);
+      const approvedUsersData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setApprovedUsers(approvedUsersData);
+    } catch (error) {
+      console.error('Error fetching approved users:', error);
+      showSnackbar('Error fetching approved users', 'error');
+    }
+  }, []);
+
+  useEffect(() => {
+    // Check if user is admin
+    const isAdmin = localStorage.getItem('isAdmin') === 'true';
+    if (!isAdmin) {
+      navigate('/dashboard');
+      return;
+    }
+    
+    fetchRequests();
+    
+    // If the tab is Managers (3), fetch all managers and approved users
+    if (tabValue === 3) {
+      fetchManagers();
+      fetchApprovedUsers();
+    }
+  }, [navigate, tabValue, fetchManagers, fetchApprovedUsers]);
+
+  useEffect(() => {
+    // Check if there's a tab query parameter in the URL
+    const searchParams = new URLSearchParams(location.search);
+    const tabParam = searchParams.get('tab');
+    
+    // Set the initial tab value based on the URL parameter
+    if (tabParam !== null) {
+      const tabValue = parseInt(tabParam);
+      if (!isNaN(tabValue) && tabValue >= 0 && tabValue <= 3) {
+        setTabValue(tabValue);
+      }
+    }
+    
+    // ...existing code for admin check and data fetching...
+  }, [location.search, navigate, fetchManagers, fetchApprovedUsers]);
+
+  useEffect(() => {
+    // Filter requests based on search term and selected tab
+    const filtered = requests.filter(request => {
+      const matchesSearch = !searchTerm || 
+        request.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        request.email?.toLowerCase().includes(searchTerm.toLowerCase());
+        
+      const matchesTab = 
+        (tabValue === 0 && request.status === 'pending') || 
+        (tabValue === 1 && request.status === 'approved') ||
+        (tabValue === 2 && request.status === 'rejected');
+        
+      return matchesSearch && matchesTab;
+    });
+    
+    setFilteredRequests(filtered);
+  }, [requests, searchTerm, tabValue]);
+
   const initiateUserAction = (request, action) => {
     setUserToAction(request);
     setActionType(action || 'process'); // Default to 'process' if no action specified
     setConfirmError('');
     setConfirmDialogOpen(true);
   };
-
-  // Fix the issue where admin gets logged out after approving a user
-
-  // In the handleUserAction function, replace the createUserWithEmailAndPassword approach
-  // with the Firebase Admin SDK or REST API approach
 
   const handleUserAction = async (request, action) => {
     try {
@@ -133,9 +195,6 @@ const AdminVerification = () => {
           } catch (error) {
             console.log('User might already exist, continuing with approval');
           }
-          
-          // Send reset email using the helper
-          //await sendPasswordReset(request.email);
           
           // Send custom welcome email
           await sendApprovalEmail(request, tempPassword);
@@ -172,7 +231,6 @@ const AdminVerification = () => {
     }
   };
 
-  // Also update the handleConfirmApproval function to use the REST API for authentication
   const handleConfirmAction = async (password) => {
     if (!userToAction || !password || !actionType) return;
     
@@ -209,6 +267,58 @@ const AdminVerification = () => {
       setConfirmError(error.message);
     } finally {
       setConfirmLoading(false);
+    }
+  };
+
+  // Add a function to check if a user is already a manager
+  const isAlreadyManager = useCallback((email) => {
+    if (!email) return false;
+    return managers.some(manager => 
+      manager.email.toLowerCase() === email.toLowerCase()
+    );
+  }, [managers]);
+
+  const handleAddManager = async () => {
+    if (!newManagerEmail.trim()) {
+      showSnackbar('Please enter an email address', 'error');
+      return;
+    }
+    
+    // Check if the email is from an approved user
+    const isApprovedUser = approvedUsers.some(
+      user => user.email.toLowerCase() === newManagerEmail.toLowerCase()
+    );
+    
+    if (!isApprovedUser) {
+      showSnackbar('Only approved users can be added as managers', 'error');
+      return;
+    }
+    
+    // Check if the user is already a manager
+    if (isAlreadyManager(newManagerEmail)) {
+      showSnackbar('This user is already a manager', 'info');
+      return;
+    }
+    
+    try {
+      await addManager(newManagerEmail);
+      showSnackbar(`${newManagerEmail} added as a manager`, 'success');
+      setNewManagerEmail('');
+      fetchManagers();
+    } catch (error) {
+      console.error('Error adding manager:', error);
+      showSnackbar(`Error: ${error.message}`, 'error');
+    }
+  };
+
+  const handleRemoveManager = async (email) => {
+    try {
+      await removeManager(email);
+      showSnackbar(`${email} removed from managers`, 'success');
+      fetchManagers();
+    } catch (error) {
+      console.error('Error removing manager:', error);
+      showSnackbar(`Error: ${error.message}`, 'error');
     }
   };
 
@@ -737,14 +847,6 @@ const AdminVerification = () => {
         >
           User Verification
         </Typography>
-        <Button
-          variant="contained"
-          startIcon={<HomeIcon />}
-          onClick={() => navigate('/dashboard')}
-          sx={{ alignSelf: isMobile ? 'stretch' : 'flex-end' }}
-        >
-          Back to Dashboard
-        </Button>
       </Box>
 
       <Paper elevation={3} sx={{ mb: 4 }}>
@@ -766,66 +868,182 @@ const AdminVerification = () => {
             label="Rejected" 
             sx={{ py: 2 }} 
           />
+          <Tab 
+            label="Managers" 
+            sx={{ py: 2 }} 
+          />
         </Tabs>
       </Paper>
 
-      <TextField
-        fullWidth
-        variant="outlined"
-        placeholder="Search by name or email"
-        value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
-        sx={{ mb: 3 }}
-        InputProps={{
-          startAdornment: (
-            <InputAdornment position="start">
-              <SearchIcon />
-            </InputAdornment>
-          ),
-        }}
-      />
+      {/* Only show search field for user requests, not for managers */}
+      {tabValue !== 3 && (
+        <TextField
+          fullWidth
+          variant="outlined"
+          placeholder="Search by name or email"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          sx={{ mb: 3 }}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon />
+              </InputAdornment>
+            ),
+          }}
+        />
+      )}
 
-      {isMobile ? (
-        // Mobile view - cards
+      {/* Show managers UI when tab is 3 */}
+      {tabValue === 3 ? (
         <Box>
-          {filteredRequests.length === 0 ? (
-            <Typography align="center" sx={{ my: 4, color: 'text.secondary' }}>
-              No {tabValue === 0 ? 'pending' : tabValue === 1 ? 'approved' : 'rejected'} requests found
-            </Typography>
+          <Paper elevation={1} sx={{ p: 3, mb: 3 }}>
+            <Typography variant="h6" sx={{ mb: 2 }}>Add New Manager</Typography>
+            <Box sx={{ 
+              display: 'flex', 
+              flexDirection: { xs: 'column', sm: 'row' },
+              gap: 2 
+            }}>
+              <Autocomplete
+                fullWidth
+                options={approvedUsers.filter(user => !isAlreadyManager(user.email))}
+                getOptionLabel={(option) => {
+                  // Handle both option as string and as object
+                  if (typeof option === 'string') return option;
+                  return option.email;
+                }}
+                renderOption={(props, option) => (
+                  <Box component="li" {...props}>
+                    <Box>
+                      <Typography variant="body1">
+                        {option.email}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {option.name}
+                      </Typography>
+                    </Box>
+                  </Box>
+                )}
+                value={newManagerEmail}
+                onChange={(event, newValue) => {
+                  setNewManagerEmail(newValue ? newValue.email : '');
+                }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Manager Email"
+                    placeholder="Select from approved users"
+                  />
+                )}
+              />
+              <Button
+                variant="contained"
+                onClick={handleAddManager}
+                disabled={!newManagerEmail.trim()}
+                sx={{ 
+                  whiteSpace: 'nowrap',
+                  minWidth: { xs: '100%', sm: '120px' }
+                }}
+              >
+                Add Manager
+              </Button>
+            </Box>
+          </Paper>
+
+          <Typography variant="h6" sx={{ mb: 2 }}>Current Managers</Typography>
+          {managers.length === 0 ? (
+            <Paper sx={{ p: 3, textAlign: 'center' }}>
+              <Typography color="text.secondary">No managers found</Typography>
+            </Paper>
           ) : (
-            filteredRequests.map(renderMobileUserCard)
+            managers.map((manager) => (
+              <Paper 
+                key={manager.email}
+                elevation={1}
+                sx={{ 
+                  p: 2, 
+                  mb: 2, 
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}
+              >
+                <Box>
+                  <Typography variant="body1">{manager.email}</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Added by {manager.addedBy} on {new Date(manager.addedAt).toLocaleDateString()}
+                  </Typography>
+                </Box>
+                <Button
+                  variant="outlined"
+                  color="error"
+                  onClick={() => handleRemoveManager(manager.email)}
+                  size="small"
+                  startIcon={<DeleteIcon />}
+                >
+                  Remove
+                </Button>
+              </Paper>
+            ))
           )}
         </Box>
       ) : (
-        // Desktop view - table
-        <TableContainer component={Paper}>
-          <Table>
-            <TableHead>
-              <TableRow sx={{ backgroundColor: 'primary.main' }}>
-                <TableCell sx={{ color: 'white', fontWeight: 600 }}>Name</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 600 }}>Email</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 600 }}>Request Date</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 600 }}>Status</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 600 }}>Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {filteredRequests.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={5} align="center" sx={{ py: 3 }}>
-                    No {tabValue === 0 ? 'pending' : tabValue === 1 ? 'approved' : 'rejected'} requests found
-                  </TableCell>
+        // Render original content for other tabs (Pending, Approved, Rejected)
+        isMobile ? (
+          <Box>
+            {filteredRequests.length === 0 ? (
+              <Typography align="center" sx={{ my: 4, color: 'text.secondary' }}>
+                No {tabValue === 0 ? 'pending' : tabValue === 1 ? 'approved' : 'rejected'} requests found
+              </Typography>
+            ) : (
+              filteredRequests.map(renderMobileUserCard)
+            )}
+          </Box>
+        ) : (
+          <TableContainer component={Paper}>
+            <Table>
+              <TableHead>
+                <TableRow sx={{ backgroundColor: 'primary.main' }}>
+                  <TableCell sx={{ color: 'white', fontWeight: 600 }}>Name</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 600 }}>Email</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 600 }}>Request Date</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 600 }}>Status</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 600 }}>Actions</TableCell>
                 </TableRow>
-              ) : (
-                filteredRequests.map(renderTableRow)
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
+              </TableHead>
+              <TableBody>
+                {filteredRequests.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} align="center" sx={{ py: 3 }}>
+                      No {tabValue === 0 ? 'pending' : tabValue === 1 ? 'approved' : 'rejected'} requests found
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredRequests.map(renderTableRow)
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )
       )}
 
       <UserDetailsDialog />
       <PasswordConfirmDialog />
+
+      {/* Add Snackbar */}
+      <Snackbar
+        open={snackbarOpen}
+        autoHideDuration={6000}
+        onClose={() => setSnackbarOpen(false)}
+      >
+        <Alert 
+          severity={snackbarSeverity} 
+          onClose={() => setSnackbarOpen(false)}
+          sx={{ width: '100%' }}
+        >
+          {snackbarMessage}
+        </Alert>
+      </Snackbar>
     </Container>
   );
 };

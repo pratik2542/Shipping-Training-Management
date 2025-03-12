@@ -10,10 +10,12 @@ import { AdminRoute } from './utils/adminCheck';
 import ScrollToTop from './components/ScrollToTop';
 import SessionTimeoutProvider from './components/SessionTimeoutProvider';
 import { initializeItemMasterData } from './utils/itemMasterData';
+import Layout from './components/common/Layout'; // Import the Layout component
 
 // Use lazy loading for routes
 const Login = React.lazy(() => import('./components/Login'));
 const Dashboard = React.lazy(() => import('./components/Dashboard'));
+const Shipment = React.lazy(() => import('./components/Shipment')); // Add new Shipment component
 const ShippingForm = React.lazy(() => import('./components/ShippingForm'));
 const Records = React.lazy(() => import('./components/Records'));
 const Manufacturing = React.lazy(() => import('./components/Manufacturing/Manufacturing'));
@@ -49,9 +51,11 @@ function App() {
     const isTestUser = localStorage.getItem('isTestUser') === 'true';
     const authInstance = isTestUser ? testAuth : auth;
     return authInstance.currentUser ? (
-      // Wrap protected routes with SessionTimeoutProvider
+      // Wrap protected routes with SessionTimeoutProvider and Layout
       <SessionTimeoutProvider timeoutMinutes={15}>
-        {children}
+        <Layout>
+          {children}
+        </Layout>
       </SessionTimeoutProvider>
     ) : (
       <Navigate to="/" />
@@ -76,19 +80,28 @@ function App() {
         <ScrollToTop />
         <Suspense fallback={<LoadingFallback />}>
           <Routes>
-            {/* Public routes */}
+            {/* Public routes - no Layout */}
             <Route path="/" element={<Login />} />
             <Route path="/reset-password" element={<PasswordReset />} />
             <Route path="/pending-status" element={<PendingStatus />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/check-status" element={<CheckStatus />} />
             
-            {/* Protected routes - already wrapped in ProtectedRoute */}
+            {/* Protected routes with Layout */}
             <Route
               path="/dashboard"
               element={
                 <ProtectedRoute>
                   <Dashboard />
+                </ProtectedRoute>
+              }
+            />
+            {/* Add new shipment hub route */}
+            <Route
+              path="/shipment"
+              element={
+                <ProtectedRoute>
+                  <Shipment />
                 </ProtectedRoute>
               }
             />
@@ -168,7 +181,9 @@ function App() {
               path="/admin/verify"
               element={
                 <AdminRoute>
-                  <AdminVerification />
+                  <Layout>
+                    <AdminVerification />
+                  </Layout>
                 </AdminRoute>
               }
             />
