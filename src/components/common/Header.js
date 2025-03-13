@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   AppBar, 
   Toolbar, 
@@ -55,6 +55,9 @@ const Header = () => {
   const [adminSubMenuExpanded, setAdminSubMenuExpanded] = useState(false);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const [shipmentMenuOpen, setShipmentMenuOpen] = useState(false);
+  const [shipmentMenuAnchor, setShipmentMenuAnchor] = useState(null);
+  const [shipmentSubMenuExpanded, setShipmentSubMenuExpanded] = useState(false);
   
   useEffect(() => {
     const checkAdmin = () => {
@@ -96,7 +99,25 @@ const Header = () => {
     getUserName();
   }, []);
 
+  const resetAllMenus = useCallback(() => {
+    // Close all expandable menus in the drawer
+    setShipmentSubMenuExpanded(false);
+    setAdminSubMenuExpanded(false);
+    
+    // Close all poppers/dropdowns in the navbar
+    setShipmentMenuOpen(false);
+    setAdminMenuOpen(false);
+    
+    // Clear all anchors
+    setShipmentMenuAnchor(null);
+    setAdminMenuAnchor(null);
+  }, []);
+
   const handleDrawerToggle = () => {
+    // If drawer is currently open, reset all menus before closing
+    if (drawerOpen) {
+      resetAllMenus();
+    }
     setDrawerOpen(!drawerOpen);
   };
 
@@ -112,6 +133,10 @@ const Header = () => {
     try {
       handleUserMenuClose();
       const isTestUser = localStorage.getItem('isTestUser') === 'true';
+      
+      // Reset all menu states
+      resetAllMenus();
+      setDrawerOpen(false);
       
       if (isTestUser) {
         await signOut(testAuth);
@@ -221,12 +246,12 @@ const Header = () => {
     if (!adminSubMenuExpanded) {
       setShipmentSubMenuExpanded(false);
     }
+    // Ensure navbars dropdown menus are closed
+    setShipmentMenuOpen(false);
+    setAdminMenuOpen(false);
+    setShipmentMenuAnchor(null);
+    setAdminMenuAnchor(null);
   };
-
-  // Add state for shipment menu
-  const [shipmentMenuOpen, setShipmentMenuOpen] = useState(false);
-  const [shipmentMenuAnchor, setShipmentMenuAnchor] = useState(null);
-  const [shipmentSubMenuExpanded, setShipmentSubMenuExpanded] = useState(false);
 
   const handleShipmentHover = (event) => {
     setShipmentMenuAnchor(event.currentTarget);
@@ -256,19 +281,26 @@ const Header = () => {
     if (!shipmentSubMenuExpanded) {
       setAdminSubMenuExpanded(false);
     }
-  };
-
-  // Modified function for handling menu item clicks in drawer
-  const handleDrawerItemClick = (path) => {
-    navigate(path);
-    setDrawerOpen(false); 
-    // Reset all menu states to avoid blackout issues
-    setShipmentSubMenuExpanded(false);
-    setAdminSubMenuExpanded(false);
+    // Ensure navbars dropdown menus are closed
     setShipmentMenuOpen(false);
     setAdminMenuOpen(false);
     setShipmentMenuAnchor(null);
     setAdminMenuAnchor(null);
+  };
+
+  // Modified function for handling menu item clicks in drawer
+  const handleDrawerItemClick = (path) => {
+    // First close the drawer
+    setDrawerOpen(false);
+    
+    // Reset all menu states
+    resetAllMenus();
+    
+    // Use a zero-timeout to ensure UI updates properly
+    // This separates the drawer closing from the navigation
+    setTimeout(() => {
+      navigate(path);
+    }, 0);
   };
 
   // Mobile drawer - show full expanded admin menu
@@ -411,7 +443,7 @@ const Header = () => {
               <ListItemText 
                 primary="User Management" 
                 primaryTypographyProps={{
-                  fontWeight: 'bold',
+                    fontWeight: location.pathname === '/admin/verify' ? 'bold' : 'regular',
                   color: location.pathname === '/admin/verify' ? 'primary.main' : 'text.primary'
                 }}
               />
@@ -470,6 +502,11 @@ const Header = () => {
       </List>
     </Box>
   );
+
+  useEffect(() => {
+    resetAllMenus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname]);
 
   return (
     <>
@@ -716,6 +753,10 @@ const Header = () => {
         }}
         sx={{
           '& .MuiDrawer-paper': { width: 250 },
+          '& .MuiBackdrop-root': { 
+            // Increase backdrop z-index to ensure it's above all menus
+            zIndex: theme.zIndex.drawer - 1
+          }
         }}
       >
         {drawer}
