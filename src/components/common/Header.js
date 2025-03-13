@@ -20,7 +20,6 @@ import {
   Popper,
   Grow,
   Paper,
-  ClickAwayListener,
   MenuList
 } from '@mui/material';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -196,7 +195,7 @@ const Header = () => {
     }
   };
 
-  const handleAdminMenuClose = () => {
+  const handleAdminLeave = () => {
     setAdminMenuOpen(false);
   };
 
@@ -204,18 +203,24 @@ const Header = () => {
     // When user clicks User Management, go to pending tab
     navigate('/admin/verify?tab=0');
     setAdminMenuOpen(false);
+    setAdminMenuAnchor(null); // Clear the anchor element
   };
 
   // Add this function to handle menu item clicks
   const handleAdminMenuItemClick = (path) => {
     navigate(path);
     setAdminMenuOpen(false);
+    setAdminMenuAnchor(null); // Clear the anchor element
   };
 
   // Add this function to toggle the admin submenu in the drawer
   const toggleAdminSubmenu = (event) => {
     event.stopPropagation(); // Prevent parent click
     setAdminSubMenuExpanded(!adminSubMenuExpanded);
+    // Close shipment submenu when opening admin submenu
+    if (!adminSubMenuExpanded) {
+      setShipmentSubMenuExpanded(false);
+    }
   };
 
   // Add state for shipment menu
@@ -228,23 +233,42 @@ const Header = () => {
     setShipmentMenuOpen(true);
   };
 
-  const handleShipmentMenuClose = () => {
+  const handleShipmentLeave = () => {
     setShipmentMenuOpen(false);
   };
 
   const handleShipmentClick = () => {
     navigate('/shipment');
     setShipmentMenuOpen(false);
+    setShipmentMenuAnchor(null); // Clear the anchor element
   };
 
   const handleShipmentMenuItemClick = (path) => {
     navigate(path);
     setShipmentMenuOpen(false);
+    setShipmentMenuAnchor(null); // Clear the anchor element
   };
 
   const toggleShipmentSubmenu = (event) => {
     event.stopPropagation();
     setShipmentSubMenuExpanded(!shipmentSubMenuExpanded);
+    // Close admin submenu when opening shipment submenu
+    if (!shipmentSubMenuExpanded) {
+      setAdminSubMenuExpanded(false);
+    }
+  };
+
+  // Modified function for handling menu item clicks in drawer
+  const handleDrawerItemClick = (path) => {
+    navigate(path);
+    setDrawerOpen(false); 
+    // Reset all menu states to avoid blackout issues
+    setShipmentSubMenuExpanded(false);
+    setAdminSubMenuExpanded(false);
+    setShipmentMenuOpen(false);
+    setAdminMenuOpen(false);
+    setShipmentMenuAnchor(null);
+    setAdminMenuAnchor(null);
   };
 
   // Mobile drawer - show full expanded admin menu
@@ -285,7 +309,8 @@ const Header = () => {
               <React.Fragment key={item.path}>
                 <ListItem
                   button
-                  onClick={item.title === 'Shipment' ? toggleShipmentSubmenu : undefined}
+                  onClick={item.title === 'Shipment' ? toggleShipmentSubmenu : 
+                           () => handleDrawerItemClick(item.path)}
                   sx={{ 
                     bgcolor: (isActive || isSubActive) ? 'action.selected' : 'transparent',
                     '&:hover': { bgcolor: 'action.hover' }
@@ -314,10 +339,7 @@ const Header = () => {
                         <ListItem
                           button
                           key={subItem.path}
-                          onClick={() => {
-                            navigate(subItem.path);
-                            setDrawerOpen(false);
-                          }}
+                          onClick={() => handleDrawerItemClick(subItem.path)}
                           sx={{
                             py: 1,
                             bgcolor: isSubItemActive ? 'action.selected' : 'transparent',
@@ -352,10 +374,7 @@ const Header = () => {
             <ListItem 
               button 
               key={item.path}
-              onClick={() => {
-                navigate(item.path);
-                setDrawerOpen(false);
-              }}
+              onClick={() => handleDrawerItemClick(item.path)}
               sx={{
                 bgcolor: isActive ? 'action.selected' : 'transparent',
                 '&:hover': { bgcolor: 'action.hover' }
@@ -407,10 +426,7 @@ const Header = () => {
                     <ListItem
                       button
                       key={item.path}
-                      onClick={() => {
-                        navigate(item.path);
-                        setDrawerOpen(false);
-                      }}
+                      onClick={() => handleDrawerItemClick(item.path)}
                       sx={{
                         py: 1,
                         bgcolor: isActive ? 'action.selected' : 'transparent',
@@ -457,7 +473,7 @@ const Header = () => {
 
   return (
     <>
-      <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
+      <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1, borderRadius: 0 }}>
         <Toolbar>
           <IconButton
             color="inherit"
@@ -486,13 +502,14 @@ const Header = () => {
                         color="inherit"
                         onClick={handleShipmentClick}
                         onMouseEnter={handleShipmentHover}
+                        onMouseLeave={handleShipmentLeave}
                         sx={{ 
                           mx: 1, 
                           fontWeight: isActive ? 'bold' : 'regular',
                           borderBottom: isActive ? '2px solid white' : 'none',
                           '&:hover': {
                             backgroundColor: 'rgba(255, 255, 255, 0.15)',
-                            borderRadius: 1
+                            borderRadius: 0 // Change to 0 to make rectangular
                           }
                         }}
                       >
@@ -512,28 +529,31 @@ const Header = () => {
                             {...TransitionProps}
                             style={{ transformOrigin: 'top left' }}
                           >
-                            <Paper elevation={3} sx={{ mt: 1, minWidth: 180 }}>
-                              <ClickAwayListener onClickAway={handleShipmentMenuClose}>
-                                <MenuList autoFocusItem={shipmentMenuOpen} onMouseLeave={handleShipmentMenuClose}>
-                                  {item.subItems.map((subItem) => (
-                                    <MenuItem 
-                                      key={subItem.path}
-                                      onClick={() => handleShipmentMenuItemClick(subItem.path)}
-                                      sx={{ 
-                                        minHeight: 42,
-                                        '&:hover': { bgcolor: 'action.hover' }
-                                      }}
-                                    >
-                                      <ListItemIcon sx={{ minWidth: 36 }}>
-                                        {subItem.icon}
-                                      </ListItemIcon>
-                                      <ListItemText>
-                                        {subItem.title}
-                                      </ListItemText>
-                                    </MenuItem>
-                                  ))}
-                                </MenuList>
-                              </ClickAwayListener>
+                            <Paper 
+                              elevation={3}
+                              sx={{ mt: 1, minWidth: 180 }}
+                              onMouseEnter={() => setShipmentMenuOpen(true)}
+                              onMouseLeave={handleShipmentLeave}
+                            >
+                              <MenuList autoFocusItem={false}> {/* Remove onMouseLeave here */}
+                                {item.subItems.map((subItem) => (
+                                  <MenuItem 
+                                    key={subItem.path}
+                                    onClick={() => handleShipmentMenuItemClick(subItem.path)}
+                                    sx={{ 
+                                      minHeight: 42,
+                                      '&:hover': { bgcolor: 'action.hover' }
+                                    }}
+                                  >
+                                    <ListItemIcon sx={{ minWidth: 36 }}>
+                                      {subItem.icon}
+                                    </ListItemIcon>
+                                    <ListItemText>
+                                      {subItem.title}
+                                    </ListItemText>
+                                  </MenuItem>
+                                ))}
+                              </MenuList>
                             </Paper>
                           </Grow>
                         )}
@@ -571,13 +591,14 @@ const Header = () => {
                     color="inherit"
                     onClick={handleAdminClick} // Changed to go directly to pending tab
                     onMouseEnter={handleAdminHover}
+                    onMouseLeave={handleAdminLeave}
                     sx={{ 
                       mx: 1, 
                       fontWeight: location.pathname === '/admin/verify' ? 'bold' : 'regular',
                       borderBottom: location.pathname === '/admin/verify' ? '2px solid white' : 'none',
                       '&:hover': {
                         backgroundColor: 'rgba(255, 255, 255, 0.15)',
-                        borderRadius: 1
+                        borderRadius: 0 // Change to 0 to make rectangular
                       }
                     }}
                   >
@@ -596,28 +617,31 @@ const Header = () => {
                         {...TransitionProps}
                         style={{ transformOrigin: 'top left' }}
                       >
-                        <Paper elevation={3} sx={{ mt: 1, minWidth: 180 }}>
-                          <ClickAwayListener onClickAway={handleAdminMenuClose}>
-                            <MenuList autoFocusItem={adminMenuOpen} onMouseLeave={handleAdminMenuClose}>
-                              {adminSubmenuItems.map((item) => (
-                                <MenuItem 
-                                  key={item.path}
-                                  onClick={() => handleAdminMenuItemClick(item.path)}
-                                  sx={{ 
-                                    minHeight: 42,
-                                    '&:hover': { bgcolor: 'action.hover' }
-                                  }}
-                                >
-                                  <ListItemIcon sx={{ minWidth: 36 }}>
-                                    {item.icon}
-                                  </ListItemIcon>
-                                  <ListItemText>
-                                    {item.title}
-                                  </ListItemText>
-                                </MenuItem>
-                              ))}
-                            </MenuList>
-                          </ClickAwayListener>
+                        <Paper 
+                          elevation={3} 
+                          sx={{ mt: 1, minWidth: 180 }}
+                          onMouseEnter={() => setAdminMenuOpen(true)}
+                          onMouseLeave={handleAdminLeave}
+                        >
+                          <MenuList autoFocusItem={false}> {/* Remove onClickAway and onMouseLeave */}
+                            {adminSubmenuItems.map((item) => (
+                              <MenuItem 
+                                key={item.path}
+                                onClick={() => handleAdminMenuItemClick(item.path)}
+                                sx={{ 
+                                  minHeight: 42,
+                                  '&:hover': { bgcolor: 'action.hover' }
+                                }}
+                              >
+                                <ListItemIcon sx={{ minWidth: 36 }}>
+                                  {item.icon}
+                                </ListItemIcon>
+                                <ListItemText>
+                                  {item.title}
+                                </ListItemText>
+                              </MenuItem>
+                            ))}
+                          </MenuList>
                         </Paper>
                       </Grow>
                     )}
