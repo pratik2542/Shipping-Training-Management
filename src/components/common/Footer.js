@@ -1,5 +1,6 @@
 import React from 'react';
 import { Box, Typography, Link, Container, Divider } from '@mui/material';
+import { Link as RouterLink } from 'react-router-dom';
 
 const Footer = () => {
   return (
@@ -39,7 +40,8 @@ const Footer = () => {
             }}
           >
             <Link 
-              href="#" 
+              component={RouterLink}
+              to="/terms" 
               color="inherit" 
               underline="hover" 
               variant="body2"
@@ -47,7 +49,8 @@ const Footer = () => {
               Terms & Conditions
             </Link>
             <Link 
-              href="#" 
+              component={RouterLink}
+              to="/privacy" 
               color="inherit" 
               underline="hover" 
               variant="body2"
@@ -55,7 +58,8 @@ const Footer = () => {
               Privacy Policy
             </Link>
             <Link 
-              href="#" 
+              component={RouterLink}
+              to="/help" 
               color="inherit" 
               underline="hover" 
               variant="body2"

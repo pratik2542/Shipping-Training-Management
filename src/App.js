@@ -30,6 +30,9 @@ const PendingStatus = React.lazy(() => import('./components/PendingStatus'));
 const ForgotPassword = React.lazy(() => import('./components/ForgotPassword'));
 const CheckStatus = React.lazy(() => import('./components/CheckStatus'));
 const ItemMasterTable = React.lazy(() => import('./components/ItemMasterTable'));
+const Terms = React.lazy(() => import('./components/Terms'));
+const Privacy = React.lazy(() => import('./components/Privacy'));
+const Help = React.lazy(() => import('./components/Help'));
 
 function App() {
   // Add error logging
@@ -86,6 +89,9 @@ function App() {
             <Route path="/pending-status" element={<PendingStatus />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/check-status" element={<CheckStatus />} />
+            <Route path="/terms" element={<Terms />} />
+            <Route path="/privacy" element={<Privacy />} />
+            <Route path="/help" element={<Help />} />
             
             {/* Protected routes with Layout */}
             <Route

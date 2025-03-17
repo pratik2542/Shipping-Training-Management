@@ -227,39 +227,7 @@ const Dashboard = () => {
             </Paper>
           )}
           
-          {/* Show Item Master for both admin, test users, and managers */}
-          <Paper
-            elevation={3}
-            sx={{
-              p: 3,
-              textAlign: 'center',
-              transition: 'transform 0.2s',
-              '&:hover': {
-                transform: 'translateY(-4px)',
-              },
-              backgroundColor: '#f0f7ff',
-            }}
-          >
-            <InventoryIcon sx={{ fontSize: 60, color: 'primary.dark', mb: 2 }} />
-            <Typography variant="h6" sx={{ mb: 2 }}>
-              Item Master Data
-            </Typography>
-            <Button
-              variant="contained"
-              size="large"
-              fullWidth
-              onClick={() => navigate('/item-master')}
-              sx={{ 
-                mt: 2,
-                backgroundColor: 'primary.main',
-                '&:hover': {
-                  backgroundColor: 'primary.dark',
-                }
-              }}
-            >
-              Manage Items
-            </Button>
-          </Paper>
+          
         </Box>
       ) : null}
     </Container>
