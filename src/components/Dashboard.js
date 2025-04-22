@@ -179,7 +179,7 @@ const Dashboard = () => {
               textAlign: 'center' 
             }}
           >
-            {isAdmin ? 'Admin Controls' : 'Additional Features'}
+            {isAdmin ? 'Admin Controls' : ''}
           </Typography>
           
           {/* Only show User Verification for actual admin */}

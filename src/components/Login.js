@@ -14,12 +14,13 @@ import CircularProgress from '@mui/material/CircularProgress';
 import { getApiUrl } from '../config/api';
 import SearchIcon from '@mui/icons-material/Search';
 import LockResetIcon from '@mui/icons-material/LockReset';
+import SchoolIcon from '@mui/icons-material/School';
 import { verifyEmail } from '../utils/firebaseAuthApi';
 
 const ADMIN_EMAILS = ['pratikmak2542@gmail.com']; // Add your admin emails here
 
-const Login = () => {
-  // Add this console log to verify which API URL is being used
+// Accept isTrainingLogin prop
+const Login = ({ isTrainingLogin = false }) => {
   console.log('API URL:', process.env.REACT_APP_API_URL);
 
   const [email, setEmail] = useState('');
@@ -28,7 +29,6 @@ const Login = () => {
   const [error, setError] = useState('');
   const [showTestSignup, setShowTestSignup] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
-  const [isTestUser, setIsTestUser] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
 
@@ -37,7 +37,7 @@ const Login = () => {
     fontSize: '1rem',
     fontWeight: 500,
     height: '48px',
-    textTransform: 'none', // Prevents all-caps
+    textTransform: 'none',
     letterSpacing: '0.3px',
     '&:hover': {
       transform: 'translateY(-2px)',
@@ -75,8 +75,8 @@ const Login = () => {
       transform: 'translateY(-2px)',
       transition: 'all 0.2s ease-in-out'
     },
-    minWidth: 130, // Ensure enough width for text
-    whiteSpace: 'nowrap', // Prevent text wrapping
+    minWidth: 130,
+    whiteSpace: 'nowrap',
   };
 
   const sendAdminNotification = async (userData) => {
@@ -110,13 +110,12 @@ const Login = () => {
 
   const handleRegister = async (e) => {
     e.preventDefault();
-    if (isSubmitting) return; // Prevent multiple submissions
+    if (isSubmitting) return;
 
-    setIsSubmitting(true); // Start loading
-    setError(''); // Clear previous errors
+    setIsSubmitting(true);
+    setError('');
 
     try {
-      // Check if email exists in Firebase Auth using the secure helper
       const emailCheckResult = await verifyEmail(email);
       
       if (emailCheckResult.registered === true) {
@@ -125,7 +124,6 @@ const Login = () => {
         return;
       }
       
-      // Check if user already has a pending request
       const existingRequestQuery = query(
         collection(db, 'userRequests'),
         where('email', '==', email)
@@ -133,14 +131,11 @@ const Login = () => {
       
       const existingRequestDocs = await getDocs(existingRequestQuery);
       
-      // Check if there's any request (pending, approved, or rejected)
       if (!existingRequestDocs.empty) {
-        // Find if there's an approved request
         const approvedRequest = existingRequestDocs.docs.find(doc => 
           doc.data().status === 'approved'
         );
         
-        // Find if there's a pending request
         const pendingRequest = existingRequestDocs.docs.find(doc => 
           doc.data().status === 'pending'
         );
@@ -156,8 +151,6 @@ const Login = () => {
           setIsSubmitting(false);
           return;
         }
-        
-        // If only rejected requests exist, allow to re-register
       }
 
       const userRequest = {
@@ -165,13 +158,9 @@ const Login = () => {
         email,
         status: 'pending',
         createdAt: new Date().toISOString(),
-        isTestUser: false
       };
 
-      // Try to send notification first
       await sendAdminNotification(userRequest);
-      
-      // Only add to Firebase if notification succeeds
       await addDoc(collection(db, 'userRequests'), userRequest);
 
       alert('Registration request submitted successfully.');
@@ -181,17 +170,19 @@ const Login = () => {
       console.error('Registration failed:', error);
       setError(`Registration failed: ${error.message}`);
     } finally {
-      setIsSubmitting(false); // End loading
+      setIsSubmitting(false);
     }
   };
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    setError(''); // Clear previous errors
     try {
-      // Sign in user
-      await signInWithEmailAndPassword(auth, email, password);
-      
-      // If using temporary password, redirect to reset
+      // Sign in user (use regular auth for both logins)
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      // If using temporary password, redirect to reset (applies to both logins)
       if (password === 'tempPassword123') {
         navigate('/reset-password', { state: { fromTempPassword: true } });
         return;
@@ -200,65 +191,103 @@ const Login = () => {
       // Check if user is admin - use case-insensitive comparison
       const normalizedEmail = email.toLowerCase();
       const normalizedAdminEmails = ADMIN_EMAILS.map(email => email.toLowerCase());
-      
-      if (normalizedAdminEmails.includes(normalizedEmail)) {
-        // Store admin email for later use in auth operations
-        localStorage.setItem('adminEmail', email);
-        localStorage.setItem('isAdmin', 'true');
-        
-        // Check for pending requests
-        const pendingQuery = query(
-          collection(db, 'userRequests'),
-          where('status', '==', 'pending')
-        );
-        const pendingSnapshot = await getDocs(pendingQuery);
-        
-        // Only redirect to verify page if there are pending requests
-        if (pendingSnapshot.size > 0) {
-          navigate('/admin/verify');
-        } else {
-          navigate('/dashboard');
+      const isAdminUser = normalizedAdminEmails.includes(normalizedEmail);
+
+      // --- Determine User Access Level and Redirect ---
+      let accessLevel = 'both'; // Default access
+      let userName = user.displayName || email.split('@')[0]; // Get username
+
+      // Fetch user data from userRequests collection to get accessLevel
+      const userQuery = query(collection(db, 'userRequests'), where('email', '==', normalizedEmail));
+      const userSnapshot = await getDocs(userQuery);
+
+      if (!userSnapshot.empty) {
+        const userData = userSnapshot.docs[0].data();
+        // Check if approved
+        if (userData.status !== 'approved' && !isAdminUser) {
+           await auth.signOut(); // Sign out if not approved (and not admin)
+           setError('Your account is pending approval or has been rejected.');
+           return;
         }
+        // Get access level if approved
+        if (userData.status === 'approved') {
+            accessLevel = userData.accessLevel || 'both'; // Use stored level or default to 'both'
+        }
+        userName = userData.name || userName; // Use name from request if available
+      } else if (!isAdminUser) {
+        // If no record found in userRequests and not an admin, deny login
+        await auth.signOut();
+        setError('User record not found. Please register or contact admin.');
         return;
       }
 
-      // For test users, use test auth and mark them as test users
-      if (isTestUser) {
-        await signInWithEmailAndPassword(testAuth, email, password);
-        localStorage.setItem('isTestUser', 'true');
+      // --- Store Session Info ---
+      localStorage.setItem('userName', userName);
+      localStorage.setItem('accessLevel', accessLevel); // Store access level
+      localStorage.removeItem('isTestUser'); // Ensure test flag is removed
+
+      if (isAdminUser) {
+        localStorage.setItem('isAdmin', 'true');
+        localStorage.setItem('adminEmail', email);
       } else {
-        // Sign in and get user credentials
-        await signInWithEmailAndPassword(auth, email, password);
-        
-        // Check if user is approved
-        const userQuery = query(
-          collection(db, 'userRequests'),
-          where('email', '==', email),
-          where('status', '==', 'pending')
-        );
-        const userSnapshot = await getDocs(userQuery);
-        
-        if (!userSnapshot.empty) {
-          await auth.signOut(); // Sign out if not approved
-          setError('Your account is pending approval. Please wait for admin verification.');
+        localStorage.removeItem('isAdmin');
+        localStorage.removeItem('adminEmail');
+      }
+
+      // --- Redirect based on context and access level ---
+      if (isTrainingLogin) {
+        // If trying to log into training system
+        if (accessLevel === 'shipping') {
+          await auth.signOut(); // Sign out if user only has shipping access
+          localStorage.clear(); // Clear storage
+          setError('You do not have access to the Training System.');
           return;
         }
-
-        localStorage.removeItem('isAdmin');
-        localStorage.removeItem('isTestUser');
-        navigate('/dashboard');
+        navigate('/training'); // Redirect to training dashboard
+      } else {
+        // If logging into main system
+        if (accessLevel === 'training') {
+          await auth.signOut(); // Sign out if user only has training access
+          localStorage.clear(); // Clear storage
+          setError('You only have access to the Training System. Please use the "Go to Training System" login.');
+          return;
+        }
+        // For 'shipping' or 'both' access, or admin
+        if (isAdminUser) {
+            // Check for pending requests to decide where admin goes
+            const pendingQuery = query(collection(db, 'userRequests'), where('status', '==', 'pending'));
+            const pendingSnapshot = await getDocs(pendingQuery);
+            if (pendingSnapshot.size > 0) {
+                navigate('/admin/verify');
+            } else {
+                navigate('/dashboard');
+            }
+        } else {
+             navigate('/dashboard'); // Redirect 'shipping' or 'both' users to main dashboard
+        }
       }
+
     } catch (error) {
-      setError(error.message);
+       console.error("Login error:", error);
+       // Provide more specific error messages
+       if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+           setError('Invalid email or password.');
+       } else {
+           setError(error.message);
+       }
     }
   };
 
   const handleTestSignup = async (e) => {
     e.preventDefault();
+    setError('');
     try {
-      // Always create test users with testAuth and mark them as test users
       await createUserWithEmailAndPassword(testAuth, email, password);
       localStorage.setItem('isTestUser', 'true');
+      localStorage.setItem('userName', email.split('@')[0]); // Set username for test user
+      localStorage.removeItem('isAdmin'); // Ensure other flags are clear
+      localStorage.removeItem('adminEmail');
+      localStorage.removeItem('accessLevel'); // Clear access level for test user
       navigate('/dashboard');
     } catch (error) {
       setError(error.message);
@@ -278,10 +307,10 @@ const Login = () => {
         }}
       >
         <Avatar sx={{ m: 1, bgcolor: 'primary.main' }}>
-          <LockOutlinedIcon />
+          {isTrainingLogin ? <SchoolIcon /> : <LockOutlinedIcon />}
         </Avatar>
         <Typography component="h1" variant="h5" sx={{ mb: 3 }}>
-          {showRegister ? 'Register' : showTestSignup ? 'Create Test Account' : 'Sign in'}
+          {showRegister ? 'Register' : showTestSignup ? 'Create Test Account' : isTrainingLogin ? 'Training System Sign in' : 'Sign in'}
         </Typography>
         {error && (
           <Typography color="error" sx={{ mb: 2 }}>
@@ -387,64 +416,94 @@ const Login = () => {
                   >
                     Sign In
                   </Button>
-                  
-                  {/* Updated utility buttons container with adjusted spacing */}
-                  <Box sx={{ 
-                    display: 'flex', 
-                    justifyContent: 'space-between', // Use space-between instead of gap
-                    mt: 3, 
-                    mb: 3,
-                    width: '100%'
-                  }}>
-                    <Button
-                      sx={{
-                        ...utilityButtonStyles,
-                        flex: '1 1 45%', // Allocate proper space
-                        mr: 1 // Add margin right
-                      }}
-                      onClick={() => navigate('/check-status')}
-                      startIcon={<SearchIcon sx={{ fontSize: 20 }} />}
-                    >
-                      Check Status
-                    </Button>
-                    <Button
-                      sx={{
-                        ...utilityButtonStyles,
-                        flex: '1 1 45%', // Allocate proper space
-                        ml: 1 // Add margin left
-                      }}
-                      onClick={() => navigate('/forgot-password')}
-                      startIcon={<LockResetIcon sx={{ fontSize: 20 }} />}
-                    >
-                      Reset Password
-                    </Button>
-                  </Box>
 
-                  <Divider sx={{ my: 2 }}>
-                    <Typography variant="body2" color="text.secondary">
-                      or
-                    </Typography>
-                  </Divider>
+                  {!isTrainingLogin && (
+                    <>
+                      <Box sx={{ 
+                        display: 'flex', 
+                        justifyContent: 'space-between', 
+                        mt: 3, 
+                        mb: 3,
+                        width: '100%'
+                      }}>
+                        <Button
+                          sx={{
+                            ...utilityButtonStyles,
+                            flex: '1 1 45%',
+                            mr: 1
+                          }}
+                          onClick={() => navigate('/check-status')}
+                          startIcon={<SearchIcon sx={{ fontSize: 20 }} />}
+                        >
+                          Check Status
+                        </Button>
+                        <Button
+                          sx={{
+                            ...utilityButtonStyles,
+                            flex: '1 1 45%',
+                            ml: 1
+                          }}
+                          onClick={() => navigate('/forgot-password')}
+                          startIcon={<LockResetIcon sx={{ fontSize: 20 }} />}
+                        >
+                          Reset Password
+                        </Button>
+                      </Box>
 
-                  <Button
-                    fullWidth
-                    variant="outlined"
-                    onClick={() => setShowRegister(true)}
-                    sx={{ ...outlinedButtonStyles, mb: 1 }}
-                  >
-                    Create Account
-                  </Button>
-                  <Button
-                    fullWidth
-                    variant="outlined"
-                    onClick={() => {
-                      setShowTestSignup(true);
-                      setIsTestUser(true);
-                    }}
-                    sx={outlinedButtonStyles}
-                  >
-                    Create Test Account
-                  </Button>
+                      <Divider sx={{ my: 2 }}>
+                        <Typography variant="body2" color="text.secondary">
+                          or
+                        </Typography>
+                      </Divider>
+
+                      <Button
+                        fullWidth
+                        variant="outlined"
+                        onClick={() => setShowRegister(true)}
+                        sx={{ ...outlinedButtonStyles, mb: 1 }}
+                      >
+                        Create Account
+                      </Button>
+                      <Button
+                        fullWidth
+                        variant="outlined"
+                        onClick={() => {
+                          setShowTestSignup(true);
+                        }}
+                        sx={{ ...outlinedButtonStyles, mb: 1 }}
+                      >
+                        Create Test Account
+                      </Button>
+                      <Button
+                        fullWidth
+                        variant="outlined"
+                        color="secondary"
+                        onClick={() => navigate('/login/training')}
+                        startIcon={<SchoolIcon />}
+                        sx={{ 
+                          ...outlinedButtonStyles, 
+                          borderColor: 'secondary.main', 
+                          color: 'secondary.main', 
+                          '&:hover': { 
+                            borderColor: 'secondary.dark', 
+                            backgroundColor: 'rgba(156, 39, 176, 0.04)' 
+                          } 
+                        }}
+                      >
+                        Go to Training System
+                      </Button>
+                    </>
+                  )}
+                  {isTrainingLogin && (
+                    <Button
+                      fullWidth
+                      variant="outlined"
+                      onClick={() => navigate('/')}
+                      sx={{ ...outlinedButtonStyles, mt: 2 }}
+                    >
+                      Back to Main Login
+                    </Button>
+                  )}
                 </>
               ) : (
                 <>
@@ -462,7 +521,6 @@ const Login = () => {
                     variant="outlined"
                     onClick={() => {
                       setShowTestSignup(false);
-                      setIsTestUser(false);
                     }}
                     sx={{ ...outlinedButtonStyles, mt: 1 }}
                   >

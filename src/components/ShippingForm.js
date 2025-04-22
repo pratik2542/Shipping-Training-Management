@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react'; // Removed useRef
 import {
   Box,
   TextField,
@@ -8,76 +8,18 @@ import {
   Grid,
   Paper,
   Input,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Autocomplete,
   InputAdornment
 } from '@mui/material';
 import { collection, addDoc, doc, getDoc, updateDoc, query, orderBy, limit, getDocs } from 'firebase/firestore';
-import { db } from '../firebase/config';
-import { testDb } from '../firebase/testConfig';
+import { db, auth } from '../firebase/config'; // Import auth
+import { testDb, testAuth } from '../firebase/testConfig'; // Import testAuth
 import { useNavigate, useLocation } from 'react-router-dom';
-import SignaturePad from 'react-signature-canvas';
+import SignatureDialog from './common/SignatureDialog'; // Import the extracted component
 import { MenuItem, FormControl, InputLabel, Select, FormControlLabel, Checkbox, IconButton } from '@mui/material';
 import ClearIcon from '@mui/icons-material/Clear';
 import SearchIcon from '@mui/icons-material/Search';
 import { getAllItems } from '../utils/itemMasterData';
-
-const SignatureDialog = ({ open, onClose, onSave, title }) => {
-  const sigPadRef = useRef(null);
-
-  const handleSave = () => {
-    if (sigPadRef.current) {
-      const signatureData = sigPadRef.current.toDataURL();
-      onSave(signatureData);
-      onClose();
-    }
-  };
-
-  const handleClear = () => {
-    if (sigPadRef.current) {
-      sigPadRef.current.clear();
-    }
-  };
-
-  return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>{title}</DialogTitle>
-      <DialogContent>
-        <Box
-          sx={{
-            border: '1px solid #ccc',
-            borderRadius: 1,
-            mt: 2,
-            backgroundColor: '#fff',
-          }}
-        >
-          <SignaturePad
-            ref={sigPadRef}
-            canvasProps={{
-              width: 500,
-              height: 200,
-              className: 'signature-canvas'
-            }}
-          />
-        </Box>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={handleClear} color="secondary">
-          Clear
-        </Button>
-        <Button onClick={onClose}>
-          Cancel
-        </Button>
-        <Button onClick={handleSave} variant="contained">
-          Save Signature
-        </Button>
-      </DialogActions>
-    </Dialog>
-  );
-};
 
 const ShippingForm = () => {
   const navigate = useNavigate();
@@ -122,6 +64,11 @@ const ShippingForm = () => {
   const getDbInstance = () => {
     const isTestUser = localStorage.getItem('isTestUser') === 'true';
     return isTestUser ? testDb : db;
+  };
+
+  const getAuthInstance = () => { // Add this function
+    const isTestUser = localStorage.getItem('isTestUser') === 'true';
+    return isTestUser ? testAuth : auth;
   };
 
   const getCollectionName = () => {
@@ -266,14 +213,22 @@ const ShippingForm = () => {
     
     try {
       const isTestUser = localStorage.getItem('isTestUser') === 'true';
-      const dbInstance = isTestUser ? testDb : db;
-      const collectionName = isTestUser ? 'test_shipments' : 'shipments';
+      const dbInstance = getDbInstance(); // Use existing function
+      const authInstance = getAuthInstance(); // Get auth instance
+      const collectionName = getCollectionName(); // Use existing function
+      const currentUser = authInstance.currentUser; // Get current user
+
+      if (!currentUser) {
+        throw new Error("User not authenticated.");
+      }
 
       // Only generate new ID for new records, not for edits
       let dataToSubmit = {
         ...formData,
         lastUpdated: new Date().toISOString(),
-        isTestData: isTestUser
+        isTestData: isTestUser,
+        userId: currentUser.uid, // Add userId
+        userEmail: currentUser.email // Optionally add email for easier debugging
       };
 
       if (!isEditMode) {

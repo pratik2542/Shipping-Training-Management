@@ -25,7 +25,12 @@ import {
   CircularProgress,
   Snackbar,
   Alert,
-  Autocomplete 
+  Autocomplete,
+  Radio,
+  RadioGroup,
+  FormControlLabel,
+  FormControl,
+  FormLabel
 } from '@mui/material';
 import { collection, query, getDocs, doc, updateDoc, orderBy, deleteDoc, where } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -36,8 +41,8 @@ import EmailIcon from '@mui/icons-material/Email';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
-import MoreVertIcon from '@mui/icons-material/MoreVert';
 import DeleteIcon from '@mui/icons-material/Delete';
+import EditIcon from '@mui/icons-material/Edit';
 import { useTheme, useMediaQuery } from '@mui/material';
 import { sendApprovalEmail } from '../utils/emailService';
 import { createUser, verifyPassword } from '../utils/firebaseAuthApi';
@@ -54,7 +59,8 @@ const AdminVerification = () => {
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [confirmError, setConfirmError] = useState('');
   const [userToAction, setUserToAction] = useState(null);
-  const [actionType, setActionType] = useState(null); // 'approve', 'reject', or 'delete'
+  const [actionType, setActionType] = useState(null); // 'approve', 'reject', 'delete', or 'changeAccess'
+  const [selectedAccessLevel, setSelectedAccessLevel] = useState('both'); // 'shipping', 'training', 'both' - Default to 'both'
   const [managers, setManagers] = useState([]);
   const [newManagerEmail, setNewManagerEmail] = useState('');
   const [snackbarOpen, setSnackbarOpen] = useState(false);
@@ -103,7 +109,6 @@ const AdminVerification = () => {
     }
   };
 
-  // Define fetchApprovedUsers function to get all approved users
   const fetchApprovedUsers = useCallback(async () => {
     try {
       const q = query(
@@ -123,7 +128,6 @@ const AdminVerification = () => {
   }, []);
 
   useEffect(() => {
-    // Check if user is admin
     const isAdmin = localStorage.getItem('isAdmin') === 'true';
     if (!isAdmin) {
       navigate('/dashboard');
@@ -132,7 +136,6 @@ const AdminVerification = () => {
     
     fetchRequests();
     
-    // If the tab is Managers (3), fetch all managers and approved users
     if (tabValue === 3) {
       fetchManagers();
       fetchApprovedUsers();
@@ -140,23 +143,18 @@ const AdminVerification = () => {
   }, [navigate, tabValue, fetchManagers, fetchApprovedUsers]);
 
   useEffect(() => {
-    // Check if there's a tab query parameter in the URL
     const searchParams = new URLSearchParams(location.search);
     const tabParam = searchParams.get('tab');
     
-    // Set the initial tab value based on the URL parameter
     if (tabParam !== null) {
       const tabValue = parseInt(tabParam);
       if (!isNaN(tabValue) && tabValue >= 0 && tabValue <= 3) {
         setTabValue(tabValue);
       }
     }
-    
-    // ...existing code for admin check and data fetching...
-  }, [location.search, navigate, fetchManagers, fetchApprovedUsers]);
+  }, [location.search]);
 
   useEffect(() => {
-    // Filter requests based on search term and selected tab
     const filtered = requests.filter(request => {
       const matchesSearch = !searchTerm || 
         request.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -175,12 +173,13 @@ const AdminVerification = () => {
 
   const initiateUserAction = (request, action) => {
     setUserToAction(request);
-    setActionType(action || 'process'); // Default to 'process' if no action specified
+    setActionType(action);
+    setSelectedAccessLevel(request.accessLevel || 'both');
     setConfirmError('');
     setConfirmDialogOpen(true);
   };
 
-  const handleUserAction = async (request, action) => {
+  const handleUserAction = async (request, action, accessLevel) => {
     try {
       const requestRef = doc(db, 'userRequests', request.id);
       
@@ -188,7 +187,6 @@ const AdminVerification = () => {
         try {
           const tempPassword = 'tempPassword123';
           
-          // Use the secure API helper
           try {
             await createUser(request.email, tempPassword);
             console.log('User created successfully');
@@ -196,17 +194,16 @@ const AdminVerification = () => {
             console.log('User might already exist, continuing with approval');
           }
           
-          // Send custom welcome email
           await sendApprovalEmail(request, tempPassword);
           
-          // Update request status in Firestore
           await updateDoc(requestRef, {
             status: 'approved',
-            approvedAt: new Date().toISOString()
+            approvedAt: new Date().toISOString(),
+            accessLevel: accessLevel
           });
           
           fetchRequests();
-          alert(`User ${request.email} approved and welcome email sent.`);
+          showSnackbar(`User ${request.email} approved with ${accessLevel} access.`, 'success');
         } catch (error) {
           console.error('Error during user approval:', error);
           throw error;
@@ -218,34 +215,48 @@ const AdminVerification = () => {
         });
         
         fetchRequests();
-        alert(`User ${request.email} rejected.`);
+        showSnackbar(`User ${request.email} rejected.`, 'warning');
       } else if (action === 'delete') {
-        // Delete the document from Firestore
         await deleteDoc(requestRef);
         fetchRequests();
-        alert(`User ${request.email} deleted.`);
+        showSnackbar(`User ${request.email} deleted.`, 'success');
+      } else if (action === 'changeAccess') {
+        if (!accessLevel) {
+          throw new Error('Access level must be selected.');
+        }
+        await updateDoc(requestRef, {
+          accessLevel: accessLevel,
+          lastUpdatedByAdmin: localStorage.getItem('adminEmail'),
+          lastUpdatedAt: new Date().toISOString()
+        });
+        fetchRequests();
+        fetchApprovedUsers();
+        showSnackbar(`Access level for ${request.email} updated to ${accessLevel}.`, 'success');
       }
     } catch (error) {
       console.error(`Error during user ${action}:`, error);
-      alert(`Error: ${error.message}`);
+      showSnackbar(`Error: ${error.message}`, 'error');
     }
   };
 
   const handleConfirmAction = async (password) => {
     if (!userToAction || !password || !actionType) return;
+
+    if ((actionType === 'approve' || actionType === 'changeAccess') && !selectedAccessLevel) {
+      setConfirmError('Please select an access level for the user.');
+      return;
+    }
     
     setConfirmLoading(true);
     setConfirmError('');
     
     try {
-      // Get admin email from localStorage
       const adminEmail = localStorage.getItem('adminEmail');
       if (!adminEmail) {
         throw new Error('Admin session not found. Please log in again.');
       }
       
       try {
-        // Use the secure API helper for verification
         const result = await verifyPassword(adminEmail, password);
         
         if (result.error) {
@@ -254,8 +265,7 @@ const AdminVerification = () => {
           return;
         }
         
-        // Successfully authenticated - proceed with approval
-        await handleUserAction(userToAction, actionType);
+        await handleUserAction(userToAction, actionType, (actionType === 'approve' || actionType === 'changeAccess') ? selectedAccessLevel : undefined);
         setConfirmDialogOpen(false);
       } catch (error) {
         console.error('Authentication error:', error);
@@ -270,7 +280,6 @@ const AdminVerification = () => {
     }
   };
 
-  // Add a function to check if a user is already a manager
   const isAlreadyManager = useCallback((email) => {
     if (!email) return false;
     return managers.some(manager => 
@@ -284,7 +293,6 @@ const AdminVerification = () => {
       return;
     }
     
-    // Check if the email is from an approved user
     const isApprovedUser = approvedUsers.some(
       user => user.email.toLowerCase() === newManagerEmail.toLowerCase()
     );
@@ -294,7 +302,6 @@ const AdminVerification = () => {
       return;
     }
     
-    // Check if the user is already a manager
     if (isAlreadyManager(newManagerEmail)) {
       showSnackbar('This user is already a manager', 'info');
       return;
@@ -331,7 +338,6 @@ const AdminVerification = () => {
     setDialogOpen(true);
   };
   
-  // Format date from ISO string to readable format
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
     
@@ -339,7 +345,6 @@ const AdminVerification = () => {
     return date.toLocaleString();
   };
   
-  // Render a user card for mobile view
   const renderMobileUserCard = (request) => (
     <Paper
       key={request.id}
@@ -400,54 +405,64 @@ const AdminVerification = () => {
             {request.status}
           </Typography>
         </Box>
+
+        {request.status === 'approved' && request.accessLevel && (
+          <Typography variant="body2" sx={{ mt: 1, textTransform: 'capitalize', color: 'info.main' }}>
+            Access: <strong>{request.accessLevel}</strong>
+          </Typography>
+        )}
       </Box>
       
-      {/* Action buttons */}
-      {request.status === 'pending' && (
-        <Box 
-          sx={{ 
-            display: 'flex', 
-            justifyContent: 'space-between', 
-            mt: 2,
-            pt: 2,
-            borderTop: '1px solid #eaeaea'
-          }}
-        >
-          <Button
-            variant="contained"
-            color="primary"
-            size="small"
-            sx={{ flex: 1, mr: 1 }}
-            onClick={() => initiateUserAction(request, 'approve')}
-          >
-            Approve
-          </Button>
+      <Box sx={{ display: 'flex', mt: 2, pt: 2, borderTop: '1px solid #eaeaea', gap: 1, flexWrap: 'wrap' }}>
+        {request.status === 'pending' && (
+          <>
+            <Button
+              variant="contained"
+              color="primary"
+              size="small"
+              sx={{ flexGrow: 1 }}
+              onClick={() => initiateUserAction(request, 'approve')}
+            >
+              Approve
+            </Button>
+            <Button
+              variant="outlined"
+              color="error"
+              size="small"
+              sx={{ flexGrow: 1 }}
+              onClick={() => initiateUserAction(request, 'reject')}
+            >
+              Reject
+            </Button>
+          </>
+        )}
+        {request.status === 'approved' && (
           <Button
             variant="outlined"
-            color="error"
+            color="secondary"
             size="small"
-            sx={{ flex: 1, ml: 1 }}
-            onClick={() => initiateUserAction(request, 'reject')}
+            startIcon={<EditIcon />}
+            sx={{ flexGrow: 1 }}
+            onClick={() => initiateUserAction(request, 'changeAccess')}
           >
-            Reject
+            Change Access
           </Button>
-        </Box>
-      )}
-      
-      <Box sx={{ display: 'flex', mt: 2, gap: 1 }}>
+        )}
         <Button
           variant="text"
-          fullWidth
+          size="small"
           onClick={() => openUserDetails(request)}
-          endIcon={<MoreVertIcon />}
+          sx={{ flexGrow: 1 }}
         >
-          View Details
+          Details
         </Button>
         <Button
           variant="text"
           color="error"
+          size="small"
           onClick={() => initiateUserAction(request, 'delete')}
           startIcon={<DeleteIcon />}
+          sx={{ flexGrow: 1 }}
         >
           Delete
         </Button>
@@ -455,7 +470,6 @@ const AdminVerification = () => {
     </Paper>
   );
   
-  // Render a table row for desktop view
   const renderTableRow = (request) => (
     <TableRow 
       key={request.id}
@@ -495,6 +509,17 @@ const AdminVerification = () => {
         </Box>
       </TableCell>
       <TableCell>
+        {request.status === 'approved' && request.accessLevel ? (
+          <Typography variant="caption" sx={{ textTransform: 'capitalize', color: 'info.dark' }}>
+            {request.accessLevel} Access
+          </Typography>
+        ) : request.status === 'pending' ? (
+          <Typography variant="caption" color="text.secondary">
+            Pending Access Assignment
+          </Typography>
+        ) : null}
+      </TableCell>
+      <TableCell>
         {request.status === 'pending' && (
           <>
             <Button
@@ -516,10 +541,22 @@ const AdminVerification = () => {
             </Button>
           </>
         )}
+        {request.status === 'approved' && (
+          <Button
+            variant="outlined"
+            color="secondary"
+            size="small"
+            startIcon={<EditIcon />}
+            sx={{ mr: 1 }}
+            onClick={() => initiateUserAction(request, 'changeAccess')}
+          >
+            Change Access
+          </Button>
+        )}
         <Button
           variant="text"
           size="small"
-          sx={{ ml: request.status === 'pending' ? 1 : 0 }}
+          sx={{ ml: (request.status === 'pending' || request.status === 'approved') ? 1 : 0 }}
           onClick={() => openUserDetails(request)}
         >
           Details
@@ -538,7 +575,6 @@ const AdminVerification = () => {
     </TableRow>
   );
   
-  // User details dialog
   const UserDetailsDialog = () => (
     <Dialog 
       open={dialogOpen} 
@@ -647,6 +683,20 @@ const AdminVerification = () => {
                   <Divider />
                 </>
               )}
+
+              {selectedUser.status === 'approved' && selectedUser.accessLevel && (
+                <>
+                  <ListItem sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                    <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                      Access Level
+                    </Typography>
+                    <Typography variant="body1" sx={{ textTransform: 'capitalize' }}>
+                      {selectedUser.accessLevel}
+                    </Typography>
+                  </ListItem>
+                  <Divider />
+                </>
+              )}
             </List>
             
             {selectedUser.status === 'pending' && (
@@ -707,24 +757,17 @@ const AdminVerification = () => {
     const [localPassword, setLocalPassword] = useState('');
     const inputRef = React.useRef(null);
     
-    // Reset local state when dialog opens/closes
     React.useEffect(() => {
-      if (confirmDialogOpen) {
-        setLocalPassword('');
-        // Focus the input after a brief delay to ensure the dialog is fully rendered
-        const timer = setTimeout(() => {
-          if (inputRef.current) {
-            inputRef.current.focus();
-          }
-        }, 50);
-        return () => clearTimeout(timer);
-      }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [confirmDialogOpen, actionType]);
+      const timer = setTimeout(() => {
+        if (inputRef.current) {
+          inputRef.current.focus();
+        }
+      }, 50);
+      return () => clearTimeout(timer);
+    }, []);
   
     const handleConfirmClick = () => {
       if (!localPassword) return;
-      // Use the local password state for validation
       handleConfirmAction(localPassword);
     };
   
@@ -740,6 +783,7 @@ const AdminVerification = () => {
         case 'approve': return 'approve';
         case 'reject': return 'reject';
         case 'delete': return 'delete';
+        case 'changeAccess': return 'change access level for';
         default: return 'process';
       }
     };
@@ -748,10 +792,21 @@ const AdminVerification = () => {
       switch (actionType) {
         case 'approve': return 'primary';
         case 'reject': case 'delete': return 'error';
+        case 'changeAccess': return 'secondary';
         default: return 'primary';
       }
     };
-  
+
+    const getButtonText = () => {
+        switch (actionType) {
+            case 'approve': return 'Approve';
+            case 'reject': return 'Reject';
+            case 'delete': return 'Delete';
+            case 'changeAccess': return 'Update Access';
+            default: return 'Confirm';
+        }
+    };
+
     return (
       <Dialog
         open={confirmDialogOpen}
@@ -772,8 +827,30 @@ const AdminVerification = () => {
             Please enter your password to {getActionText()}:
           </Typography>
           <Typography variant="subtitle1" sx={{ mb: 3, fontWeight: 600 }}>
-            {userToAction?.email}
+            {userToAction?.email || 'Loading user...'}
           </Typography>
+
+          <Box sx={{ my: 2, minHeight: (actionType === 'approve' || actionType === 'changeAccess') ? '70px' : '0px' }}>
+            {(actionType === 'approve' || actionType === 'changeAccess') && (
+              <FormControl component="fieldset">
+                <FormLabel component="legend">
+                  {actionType === 'approve' ? 'Assign Access Level *' : 'New Access Level *'}
+                </FormLabel>
+                <RadioGroup
+                  row
+                  aria-label="access-level"
+                  name="access-level-group"
+                  value={selectedAccessLevel}
+                  onChange={(e) => setSelectedAccessLevel(e.target.value)}
+                >
+                  <FormControlLabel value="shipping" control={<Radio />} label="Shipping" />
+                  <FormControlLabel value="training" control={<Radio />} label="Training" />
+                  <FormControlLabel value="both" control={<Radio />} label="Both" />
+                </RadioGroup>
+              </FormControl>
+            )}
+          </Box>
+
           <TextField
             inputRef={inputRef}
             fullWidth
@@ -808,7 +885,7 @@ const AdminVerification = () => {
             variant="contained"
             color={getActionColor()}
             onClick={handleConfirmClick}
-            disabled={!localPassword || confirmLoading}
+            disabled={!localPassword || confirmLoading || ((actionType === 'approve' || actionType === 'changeAccess') && !selectedAccessLevel)}
             sx={{ ml: 1, minWidth: '120px' }}
           >
             {confirmLoading ? (
@@ -817,7 +894,7 @@ const AdminVerification = () => {
                 <span>Verifying</span>
               </Box>
             ) : (
-              `${(actionType || 'Confirm').charAt(0).toUpperCase() + (actionType || 'confirm').slice(1)}`
+              getButtonText()
             )}
           </Button>
         </DialogActions>
@@ -875,7 +952,6 @@ const AdminVerification = () => {
         </Tabs>
       </Paper>
 
-      {/* Only show search field for user requests, not for managers */}
       {tabValue !== 3 && (
         <TextField
           fullWidth
@@ -894,7 +970,6 @@ const AdminVerification = () => {
         />
       )}
 
-      {/* Show managers UI when tab is 3 */}
       {tabValue === 3 ? (
         <Box>
           <Paper elevation={1} sx={{ p: 3, mb: 3 }}>
@@ -908,7 +983,6 @@ const AdminVerification = () => {
                 fullWidth
                 options={approvedUsers.filter(user => !isAlreadyManager(user.email))}
                 getOptionLabel={(option) => {
-                  // Handle both option as string and as object
                   if (typeof option === 'string') return option;
                   return option.email;
                 }}
@@ -988,7 +1062,6 @@ const AdminVerification = () => {
           )}
         </Box>
       ) : (
-        // Render original content for other tabs (Pending, Approved, Rejected)
         isMobile ? (
           <Box>
             {filteredRequests.length === 0 ? (
@@ -1008,13 +1081,14 @@ const AdminVerification = () => {
                   <TableCell sx={{ color: 'white', fontWeight: 600 }}>Email</TableCell>
                   <TableCell sx={{ color: 'white', fontWeight: 600 }}>Request Date</TableCell>
                   <TableCell sx={{ color: 'white', fontWeight: 600 }}>Status</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 600 }}>Access Level</TableCell>
                   <TableCell sx={{ color: 'white', fontWeight: 600 }}>Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {filteredRequests.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} align="center" sx={{ py: 3 }}>
+                    <TableCell colSpan={6} align="center" sx={{ py: 3 }}>
                       No {tabValue === 0 ? 'pending' : tabValue === 1 ? 'approved' : 'rejected'} requests found
                     </TableCell>
                   </TableRow>
@@ -1030,7 +1104,6 @@ const AdminVerification = () => {
       <UserDetailsDialog />
       <PasswordConfirmDialog />
 
-      {/* Add Snackbar */}
       <Snackbar
         open={snackbarOpen}
         autoHideDuration={6000}

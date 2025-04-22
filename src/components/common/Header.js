@@ -20,7 +20,9 @@ import {
   Popper,
   Grow,
   Paper,
-  MenuList
+  MenuList,
+  Collapse,
+  Badge
 } from '@mui/material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import MenuIcon from '@mui/icons-material/Menu';
@@ -37,11 +39,21 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
 import GroupsIcon from '@mui/icons-material/Groups';
 import AddIcon from '@mui/icons-material/Add';
-import { signOut } from 'firebase/auth';
-import { auth } from '../../firebase/config';
-import { testAuth } from '../../firebase/testConfig';
-import { collection, getDocs, query, where } from 'firebase/firestore';
-import { db } from '../../firebase/config';
+import SchoolIcon from '@mui/icons-material/School';
+import BusinessCenterIcon from '@mui/icons-material/BusinessCenter';
+import HistoryIcon from '@mui/icons-material/History';
+import AssignmentIcon from '@mui/icons-material/Assignment';
+import GroupIcon from '@mui/icons-material/Group';
+import ExpandLess from '@mui/icons-material/ExpandLess';
+import ExpandMore from '@mui/icons-material/ExpandMore';
+import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import { auth, db } from '../../firebase/config';
+import { collection, getDocs, query, where, onSnapshot } from 'firebase/firestore';
+import { testDb, testAuth } from '../../firebase/testConfig';
+import { isManager } from '../../utils/userRoles';
+import { clearTestUserDataAndAccount } from '../../utils/testUserData';
 
 const Header = () => {
   const navigate = useNavigate();
@@ -58,7 +70,12 @@ const Header = () => {
   const [shipmentMenuOpen, setShipmentMenuOpen] = useState(false);
   const [shipmentMenuAnchor, setShipmentMenuAnchor] = useState(null);
   const [shipmentSubMenuExpanded, setShipmentSubMenuExpanded] = useState(false);
-  
+  const isTrainingSystem = location.pathname.startsWith('/training') || 
+                          location.search.includes('system=training');
+  const isShipping = !isTrainingSystem;
+  const [isUserManager, setIsUserManager] = useState(false);
+  const [pendingTrainingCount, setPendingTrainingCount] = useState(0);
+
   useEffect(() => {
     const checkAdmin = () => {
       const storedAdmin = localStorage.getItem('isAdmin') === 'true';
@@ -78,7 +95,6 @@ const Header = () => {
             where('email', '==', user.email),
             where('status', '==', 'approved')
           );
-          
           try {
             const querySnapshot = await getDocs(userQuery);
             if (!querySnapshot.empty) {
@@ -99,22 +115,54 @@ const Header = () => {
     getUserName();
   }, []);
 
+  useEffect(() => {
+    const checkManagerStatus = async () => {
+      try {
+        const managerStatus = await isManager();
+        setIsUserManager(managerStatus);
+      } catch (error) {
+        console.error("Error checking manager status in Header:", error);
+      }
+    };
+
+    checkManagerStatus();
+
+    let unsubscribe = () => {};
+    const setupListener = async () => {
+      const managerStatus = await isManager();
+      const isAdmin = localStorage.getItem('isAdmin') === 'true';
+      if (managerStatus || isAdmin) {
+        const authInstance = localStorage.getItem('isTestUser') === 'true' ? testAuth : auth;
+        const user = authInstance.currentUser;
+        if (!user) return;
+        const dbInstance = localStorage.getItem('isTestUser') === 'true' ? testDb : db;
+        const collectionName = localStorage.getItem('isTestUser') === 'true' ? 'test_selfTrainings' : 'selfTrainings';
+        const q = query(
+          collection(dbInstance, collectionName),
+          where('status', '==', 'pending')
+        );
+        unsubscribe = onSnapshot(q, (querySnapshot) => {
+          const count = querySnapshot.docs.filter(doc => doc.data().userId !== user.uid).length;
+          setPendingTrainingCount(count);
+        }, (error) => {
+          console.error("Error listening to pending training count:", error);
+        });
+      }
+    };
+    setupListener();
+    return () => unsubscribe();
+  }, []);
+
   const resetAllMenus = useCallback(() => {
-    // Close all expandable menus in the drawer
     setShipmentSubMenuExpanded(false);
     setAdminSubMenuExpanded(false);
-    
-    // Close all poppers/dropdowns in the navbar
     setShipmentMenuOpen(false);
     setAdminMenuOpen(false);
-    
-    // Clear all anchors
     setShipmentMenuAnchor(null);
     setAdminMenuAnchor(null);
   }, []);
 
   const handleDrawerToggle = () => {
-    // If drawer is currently open, reset all menus before closing
     if (drawerOpen) {
       resetAllMenus();
     }
@@ -130,31 +178,40 @@ const Header = () => {
   };
 
   const handleLogout = async () => {
+    const isTestUser = localStorage.getItem('isTestUser') === 'true';
+    const authInstance = isTestUser ? testAuth : auth;
+
     try {
-      handleUserMenuClose();
-      const isTestUser = localStorage.getItem('isTestUser') === 'true';
-      
-      // Reset all menu states
-      resetAllMenus();
-      setDrawerOpen(false);
-      
       if (isTestUser) {
-        await signOut(testAuth);
+        console.log("Logging out test user and clearing data...");
+        await clearTestUserDataAndAccount();
+        console.log("Test user data and account cleared.");
       } else {
-        await signOut(auth);
+        console.log("Logging out regular user...");
+        await authInstance.signOut();
       }
-      
-      localStorage.removeItem('isTestUser');
+      localStorage.removeItem('userName');
       localStorage.removeItem('isAdmin');
+      localStorage.removeItem('isTestUser');
+      localStorage.removeItem('adminEmail');
+      handleUserMenuClose();
       navigate('/');
+      console.log("Logout successful, navigated to login.");
+
     } catch (error) {
-      console.error('Error during logout:', error);
+      console.error('Logout failed:', error);
+      alert(`Logout failed: ${error.message}`);
+      try {
+        await authInstance.signOut();
+      } catch (signOutError) {
+        console.error('Fallback sign-out failed:', signOutError);
+      }
+      localStorage.clear();
       navigate('/');
     }
   };
 
-  // Updated Navigation Items - combining Create Shipment and View Records
-  const navigationItems = [
+  const shippingNavigationItems = [
     { 
       title: 'Dashboard', 
       path: '/dashboard',
@@ -184,12 +241,49 @@ const Header = () => {
     },
     { 
       title: 'Item Master', 
-      path: '/item-master',
+      path: '/item-master', 
       icon: <InventoryIcon /> 
     },
   ];
 
-  // Admin submenu items
+  const trainingNavigationItems = [
+    {
+      title: 'Training Dashboard',
+      path: '/training',
+      icon: <DashboardIcon />
+    },
+    {
+      title: 'My Trainings',
+      path: '/training/records',
+      icon: <HistoryIcon />
+    },
+    {
+      title: 'Self Training',
+      path: '/training/self-training-form',
+      icon: <AssignmentIcon />
+    },
+    ...(isAdmin || isUserManager ? [
+      {
+        title: 'In-Class Training',
+        path: '/training/in-class-training-form',
+        icon: <GroupIcon />
+      },
+      {
+        title: 'Approve Training',
+        path: '/training/approve',
+        icon: <PlaylistAddCheckIcon />,
+        badgeCount: pendingTrainingCount
+      },
+      {
+        title: 'All Training Records',
+        path: '/training/all-records',
+        icon: <ListAltIcon />
+      }
+    ] : [])
+  ];
+
+  const currentNavigationItems = isTrainingSystem ? trainingNavigationItems : shippingNavigationItems;
+
   const adminSubmenuItems = [
     {
       title: 'Pending',
@@ -225,32 +319,29 @@ const Header = () => {
   };
 
   const handleAdminClick = () => {
-    // When user clicks User Management, go to pending tab
-    navigate('/admin/verify?tab=0');
+    const adminPath = `/admin/verify?tab=0&system=${isTrainingSystem ? 'training' : 'shipping'}`;
+    navigate(adminPath);
     setAdminMenuOpen(false);
-    setAdminMenuAnchor(null); // Clear the anchor element
+    setAdminMenuAnchor(null);
   };
 
-  // Add this function to handle menu item clicks
   const handleAdminMenuItemClick = (path) => {
-    navigate(path);
+    const tabQuery = path.split('?')[1];
+    navigate(`/admin/verify?${tabQuery}&system=${isTrainingSystem ? 'training' : 'shipping'}`);
     setAdminMenuOpen(false);
-    setAdminMenuAnchor(null); // Clear the anchor element
+    setAdminMenuAnchor(null);
   };
 
-  // Add this function to toggle the admin submenu in the drawer
   const toggleAdminSubmenu = (event) => {
-    event.stopPropagation(); // Prevent parent click
+    event.stopPropagation();
     setAdminSubMenuExpanded(!adminSubMenuExpanded);
-    // Close shipment submenu when opening admin submenu
     if (!adminSubMenuExpanded) {
       setShipmentSubMenuExpanded(false);
+      setShipmentMenuOpen(false);
+      setAdminMenuOpen(false);
+      setShipmentMenuAnchor(null);
+      setAdminMenuAnchor(null);
     }
-    // Ensure navbars dropdown menus are closed
-    setShipmentMenuOpen(false);
-    setAdminMenuOpen(false);
-    setShipmentMenuAnchor(null);
-    setAdminMenuAnchor(null);
   };
 
   const handleShipmentHover = (event) => {
@@ -265,45 +356,44 @@ const Header = () => {
   const handleShipmentClick = () => {
     navigate('/shipment');
     setShipmentMenuOpen(false);
-    setShipmentMenuAnchor(null); // Clear the anchor element
+    setShipmentMenuAnchor(null);
   };
 
   const handleShipmentMenuItemClick = (path) => {
     navigate(path);
     setShipmentMenuOpen(false);
-    setShipmentMenuAnchor(null); // Clear the anchor element
+    setShipmentMenuAnchor(null);
   };
 
   const toggleShipmentSubmenu = (event) => {
     event.stopPropagation();
     setShipmentSubMenuExpanded(!shipmentSubMenuExpanded);
-    // Close admin submenu when opening shipment submenu
     if (!shipmentSubMenuExpanded) {
       setAdminSubMenuExpanded(false);
+      setShipmentMenuOpen(false);
+      setAdminMenuOpen(false);
+      setShipmentMenuAnchor(null);
+      setAdminMenuAnchor(null);
     }
-    // Ensure navbars dropdown menus are closed
-    setShipmentMenuOpen(false);
-    setAdminMenuOpen(false);
-    setShipmentMenuAnchor(null);
-    setAdminMenuAnchor(null);
   };
 
-  // Modified function for handling menu item clicks in drawer
   const handleDrawerItemClick = (path) => {
-    // First close the drawer
     setDrawerOpen(false);
-    
-    // Reset all menu states
     resetAllMenus();
-    
-    // Use a zero-timeout to ensure UI updates properly
-    // This separates the drawer closing from the navigation
     setTimeout(() => {
+      if (path.startsWith('/admin/verify') || path.includes('tab=')) {
+        if (isTrainingSystem) {
+          if (!path.includes('system=')) {
+            const separator = path.includes('?') ? '&' : '?';
+            navigate(`${path}${separator}system=training`);
+            return;
+          }
+        }
+      }
       navigate(path);
     }, 0);
   };
 
-  // Mobile drawer - show full expanded admin menu
   const drawer = (
     <Box sx={{ width: 250 }}>
       <Box sx={{ 
@@ -311,12 +401,10 @@ const Header = () => {
         flexDirection: 'column', 
         alignItems: 'center',
         p: 2,
-        bgcolor: 'primary.main',
-        color: 'white',
-        mt: '56px', // Add top margin to prevent hiding under AppBar
+        mt: '56px',
         '@media (min-width:600px)': {
-          mt: '64px', // Adjust for larger screens
-        },
+          mt: '64px',
+        }
       }}>
         <Avatar sx={{ bgcolor: 'white', color: 'primary.main', mb: 1, width: 56, height: 56 }}>
           {userName.charAt(0).toUpperCase()}
@@ -328,45 +416,38 @@ const Header = () => {
       </Box>
       <Divider />
       <List>
-        {navigationItems.map((item) => {
-          const isActive = location.pathname === item.path;
-          
-          // If the item has subitems, render differently
+        {currentNavigationItems.map((item) => {
           if (item.subItems) {
-            const isSubActive = item.subItems.some(subItem => 
-              location.pathname === subItem.path
-            );
-            
+            const isActive = location.pathname === item.path || item.subItems.some(sub => location.pathname === sub.path);
+            const isExpanded = item.title === 'Shipment' ? shipmentSubMenuExpanded : false;
+            const toggleSubmenu = item.title === 'Shipment' ? toggleShipmentSubmenu : () => {};
+
             return (
               <React.Fragment key={item.path}>
                 <ListItem
                   button
-                  onClick={item.title === 'Shipment' ? toggleShipmentSubmenu : 
-                           () => handleDrawerItemClick(item.path)}
-                  sx={{ 
-                    bgcolor: (isActive || isSubActive) ? 'action.selected' : 'transparent',
+                  onClick={toggleSubmenu}
+                  sx={{
+                    bgcolor: isActive ? 'action.selected' : 'transparent',
                     '&:hover': { bgcolor: 'action.hover' }
                   }}
                 >
-                  <ListItemIcon sx={{ 
-                    color: (isActive || isSubActive) ? 'primary.main' : 'text.secondary' 
-                  }}>
+                  <ListItemIcon sx={{ color: isActive ? 'primary.main' : 'text.secondary' }}>
                     {item.icon}
                   </ListItemIcon>
-                  <ListItemText 
-                    primary={item.title} 
+                  <ListItemText
+                    primary={item.title}
                     primaryTypographyProps={{
-                      fontWeight: (isActive || isSubActive) ? 'bold' : 'regular',
-                      color: (isActive || isSubActive) ? 'primary.main' : 'text.primary'
+                      fontWeight: isActive ? 'bold' : 'regular',
+                      color: isActive ? 'primary.main' : 'text.primary'
                     }}
                   />
+                  {isExpanded ? <ExpandLess /> : <ExpandMore />}
                 </ListItem>
-
-                {/* Show subitems if expanded (only for Shipment) */}
-                {item.title === 'Shipment' && shipmentSubMenuExpanded && (
-                  <List sx={{ pl: 4 }}>
+                <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+                  <List component="div" disablePadding sx={{ pl: 4 }}>
                     {item.subItems.map((subItem) => {
-                      const isSubItemActive = location.pathname === subItem.path;
+                      const isSubActive = location.pathname === subItem.path;
                       return (
                         <ListItem
                           button
@@ -374,65 +455,102 @@ const Header = () => {
                           onClick={() => handleDrawerItemClick(subItem.path)}
                           sx={{
                             py: 1,
-                            bgcolor: isSubItemActive ? 'action.selected' : 'transparent',
+                            bgcolor: isSubActive ? 'action.selected' : 'transparent',
                             '&:hover': { bgcolor: 'action.hover' }
                           }}
                         >
-                          <ListItemIcon sx={{ 
-                            color: isSubItemActive ? 'primary.main' : 'text.secondary',
-                            minWidth: 36
-                          }}>
+                          <ListItemIcon sx={{ color: isSubActive ? 'primary.main' : 'text.secondary', minWidth: 36 }}>
                             {subItem.icon}
                           </ListItemIcon>
-                          <ListItemText 
+                          <ListItemText
                             primary={subItem.title}
                             primaryTypographyProps={{
                               fontSize: '0.9rem',
-                              fontWeight: isSubItemActive ? 'medium' : 'regular',
-                              color: isSubItemActive ? 'primary.main' : 'text.primary'
+                              fontWeight: isSubActive ? 'medium' : 'regular',
+                              color: isSubActive ? 'primary.main' : 'text.primary'
                             }}
                           />
                         </ListItem>
                       );
                     })}
                   </List>
-                )}
+                </Collapse>
               </React.Fragment>
             );
           }
 
-          // Regular navigation item without subitems
+          const isActive = location.pathname === item.path;
+          const isTrainingItem = item.path.includes('/training/');
+          const isSpecialTrainingItem = [
+            '/training/approve', 
+            '/training/records',
+            '/training/all-records',
+            '/training/self-training-form',
+            '/training/in-class-training-form'
+          ].includes(item.path);
+
           return (
-            <ListItem 
-              button 
+            <ListItem
+              button
               key={item.path}
               onClick={() => handleDrawerItemClick(item.path)}
               sx={{
                 bgcolor: isActive ? 'action.selected' : 'transparent',
-                '&:hover': { bgcolor: 'action.hover' }
+                '&:hover': { bgcolor: 'action.hover' },
+                py: isSpecialTrainingItem ? 1.5 : (isTrainingItem ? 1.2 : undefined),
+                borderBottom: isTrainingItem ? '1px solid rgba(0,0,0,0.08)' : 'none',
+                ...(isSpecialTrainingItem && {
+                  my: 0.5,
+                  borderRadius: 1,
+                  boxShadow: isActive ? '0 0 0 1px rgba(25, 118, 210, 0.12)' : 'none',
+                }),
               }}
             >
-              <ListItemIcon sx={{ color: isActive ? 'primary.main' : 'text.secondary' }}>
-                {item.icon}
+              <ListItemIcon sx={{ 
+                color: isActive ? 'primary.main' : 'text.secondary',
+                minWidth: isSpecialTrainingItem ? 46 : (isTrainingItem ? 42 : 36),
+                '& .MuiSvgIcon-root': {
+                  fontSize: isSpecialTrainingItem ? '1.5rem' : undefined,
+                }
+              }}>
+                {item.badgeCount && item.badgeCount > 0 ? (
+                  <Badge 
+                    badgeContent={item.badgeCount} 
+                    color="error"
+                    sx={{ 
+                      '& .MuiBadge-badge': { 
+                        fontSize: '0.7rem',
+                        height: 18,
+                        minWidth: 18,
+                        top: 2,
+                        right: -4
+                      } 
+                    }}
+                  >
+                    {item.icon}
+                  </Badge>
+                ) : (
+                  item.icon
+                )}
               </ListItemIcon>
-              <ListItemText 
+              <ListItemText
                 primary={item.title}
                 primaryTypographyProps={{
-                  fontWeight: isActive ? 'bold' : 'regular',
-                  color: isActive ? 'primary.main' : 'text.primary'
+                  fontWeight: isActive ? 'bold' : (isSpecialTrainingItem ? 'medium' : 'regular'),
+                  color: isActive ? 'primary.main' : 'text.primary',
+                  fontSize: isSpecialTrainingItem ? '1rem' : (isTrainingItem ? '0.95rem' : undefined)
                 }}
               />
             </ListItem>
           );
         })}
-        
-        {/* Admin section in drawer with nested items */}
+
         {isAdmin && (
           <>
             <ListItem
               button
               onClick={toggleAdminSubmenu}
-              sx={{ 
+              sx={{
                 bgcolor: location.pathname === '/admin/verify' ? 'action.selected' : 'transparent',
                 '&:hover': { bgcolor: 'action.hover' }
               }}
@@ -440,20 +558,19 @@ const Header = () => {
               <ListItemIcon sx={{ color: location.pathname === '/admin/verify' ? 'primary.main' : 'text.secondary' }}>
                 <SupervisorAccountIcon />
               </ListItemIcon>
-              <ListItemText 
-                primary="User Management" 
+              <ListItemText
+                primary="User Management"
                 primaryTypographyProps={{
-                    fontWeight: location.pathname === '/admin/verify' ? 'bold' : 'regular',
+                  fontWeight: 'bold',
                   color: location.pathname === '/admin/verify' ? 'primary.main' : 'text.primary'
                 }}
               />
+              {adminSubMenuExpanded ? <ExpandLess /> : <ExpandMore />}
             </ListItem>
-            
-            {/* Nested admin submenu items - only show when expanded */}
-            {adminSubMenuExpanded && (
-              <List sx={{ pl: 4 }}>
+            <Collapse in={adminSubMenuExpanded} timeout="auto" unmountOnExit>
+              <List component="div" disablePadding sx={{ pl: 4 }}>
                 {adminSubmenuItems.map((item) => {
-                  const isActive = location.search.includes(`tab=${item.path.split('=')[1]}`);
+                  const isActive = location.pathname === '/admin/verify' && location.search.includes(`tab=${item.path.split('=')[1]}`);
                   return (
                     <ListItem
                       button
@@ -465,13 +582,10 @@ const Header = () => {
                         '&:hover': { bgcolor: 'action.hover' }
                       }}
                     >
-                      <ListItemIcon sx={{ 
-                        color: isActive ? 'primary.main' : 'text.secondary',
-                        minWidth: 36
-                      }}>
+                      <ListItemIcon sx={{ color: isActive ? 'primary.main' : 'text.secondary', minWidth: 36 }}>
                         {item.icon}
                       </ListItemIcon>
-                      <ListItemText 
+                      <ListItemText
                         primary={item.title}
                         primaryTypographyProps={{
                           fontSize: '0.9rem',
@@ -483,11 +597,25 @@ const Header = () => {
                   );
                 })}
               </List>
-            )}
+            </Collapse>
           </>
         )}
 
         <Divider sx={{ my: 1 }} />
+        <ListItem
+          button
+          onClick={() => {
+            handleDrawerItemClick(isTrainingSystem ? '/dashboard' : '/training');
+          }}
+        >
+          <ListItemIcon sx={{ color: 'secondary.main' }}>
+            {isTrainingSystem ? <BusinessCenterIcon /> : <SchoolIcon />}
+          </ListItemIcon>
+          <ListItemText
+            primary={isTrainingSystem ? 'Shipping System' : 'Training System'}
+            primaryTypographyProps={{ color: 'secondary.main' }}
+          />
+        </ListItem>
         <ListItem button onClick={handleLogout}>
           <ListItemIcon sx={{ color: 'error.main' }}>
             <LogoutIcon />
@@ -505,37 +633,37 @@ const Header = () => {
 
   useEffect(() => {
     resetAllMenus();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.pathname]);
+  }, [location.pathname, resetAllMenus]);
 
   return (
     <>
       <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1, borderRadius: 0 }}>
         <Toolbar>
-          <IconButton
-            color="inherit"
-            aria-label="open drawer"
-            edge="start"
-            onClick={handleDrawerToggle}
-            sx={{ mr: 2 }}
-          >
-            <MenuIcon />
-          </IconButton>
-          <Typography variant="h6" component="div" sx={{ flexGrow: 1, cursor: 'pointer' }} onClick={() => navigate('/dashboard')}>
-            PM Management
+          {isMobile && (
+            <IconButton
+              color="inherit"
+              aria-label="open drawer"
+              edge="start"
+              onClick={handleDrawerToggle}
+              sx={{ mr: 2 }}
+            >
+              <MenuIcon />
+            </IconButton>
+          )}
+          <Typography variant="h6" component="div" sx={{ flexGrow: 1, cursor: 'pointer' }} onClick={() => navigate(isTrainingSystem ? '/training' : '/dashboard')}>
+            {isTrainingSystem ? 'Training System' : 'PM Management'}
           </Typography>
           
           {!isMobile && (
             <Box sx={{ display: 'flex', alignItems: 'center' }}>
-              {navigationItems.map((item) => {
-                // If item has subitems, render with dropdown
+              {currentNavigationItems.map((item) => {
                 if (item.subItems) {
                   const isActive = item.path === location.pathname || 
                     item.subItems.some(subItem => subItem.path === location.pathname);
                   
                   return (
                     <React.Fragment key={item.path}>
-                      <Button 
+                      <Button
                         color="inherit"
                         onClick={handleShipmentClick}
                         onMouseEnter={handleShipmentHover}
@@ -546,7 +674,7 @@ const Header = () => {
                           borderBottom: isActive ? '2px solid white' : 'none',
                           '&:hover': {
                             backgroundColor: 'rgba(255, 255, 255, 0.15)',
-                            borderRadius: 0 // Change to 0 to make rectangular
+                            borderRadius: 0
                           }
                         }}
                       >
@@ -572,9 +700,9 @@ const Header = () => {
                               onMouseEnter={() => setShipmentMenuOpen(true)}
                               onMouseLeave={handleShipmentLeave}
                             >
-                              <MenuList autoFocusItem={false}> {/* Remove onMouseLeave here */}
+                              <MenuList autoFocusItem={false}>
                                 {item.subItems.map((subItem) => (
-                                  <MenuItem 
+                                  <MenuItem
                                     key={subItem.path}
                                     onClick={() => handleShipmentMenuItemClick(subItem.path)}
                                     sx={{ 
@@ -599,10 +727,9 @@ const Header = () => {
                   );
                 }
                 
-                // Regular navigation item
                 const isActive = location.pathname === item.path;
                 return (
-                  <Button 
+                  <Button
                     key={item.path}
                     color="inherit"
                     onClick={() => navigate(item.path)}
@@ -615,18 +742,26 @@ const Header = () => {
                         borderRadius: 1
                       }
                     }}
+                    startIcon={
+                      item.badgeCount && item.badgeCount > 0 ? (
+                        <Badge badgeContent={item.badgeCount} color="error" overlap="circular">
+                          {item.icon}
+                        </Badge>
+                      ) : (
+                        item.icon
+                      )
+                    }
                   >
                     {item.title}
                   </Button>
                 );
               })}
               
-              {/* Admin menu with dropdown */}
               {isAdmin && (
                 <>
                   <Button
                     color="inherit"
-                    onClick={handleAdminClick} // Changed to go directly to pending tab
+                    onClick={handleAdminClick}
                     onMouseEnter={handleAdminHover}
                     onMouseLeave={handleAdminLeave}
                     sx={{ 
@@ -635,9 +770,10 @@ const Header = () => {
                       borderBottom: location.pathname === '/admin/verify' ? '2px solid white' : 'none',
                       '&:hover': {
                         backgroundColor: 'rgba(255, 255, 255, 0.15)',
-                        borderRadius: 0 // Change to 0 to make rectangular
+                        borderRadius: 0
                       }
                     }}
+                    startIcon={<SupervisorAccountIcon />}
                   >
                     User Management
                   </Button>
@@ -660,9 +796,9 @@ const Header = () => {
                           onMouseEnter={() => setAdminMenuOpen(true)}
                           onMouseLeave={handleAdminLeave}
                         >
-                          <MenuList autoFocusItem={false}> {/* Remove onClickAway and onMouseLeave */}
+                          <MenuList autoFocusItem={false}>
                             {adminSubmenuItems.map((item) => (
-                              <MenuItem 
+                              <MenuItem
                                 key={item.path}
                                 onClick={() => handleAdminMenuItemClick(item.path)}
                                 sx={{ 
@@ -685,9 +821,33 @@ const Header = () => {
                   </Popper>
                 </>
               )}
+
+              {(isAdmin || isUserManager) && (
+                <>
+                  {isShipping && (
+                    <Button
+                      color="inherit"
+                      onClick={() => navigate('/training')}
+                      sx={{ ml: 1 }}
+                      startIcon={<ArrowForwardIcon />}
+                    >
+                      Go to Training
+                    </Button>
+                  )}
+                  {isTrainingSystem && (
+                    <Button
+                      color="inherit"
+                      onClick={() => navigate('/dashboard')}
+                      sx={{ ml: 1 }}
+                      startIcon={<ArrowBackIcon />}
+                    >
+                      Go to Shipping
+                    </Button>
+                  )}
+                </>
+              )}
             </Box>
           )}
-          
           <Box>
             <IconButton
               color="inherit"
@@ -697,7 +857,7 @@ const Header = () => {
               aria-haspopup="true"
               sx={{ 
                 '&:hover': { 
-                  backgroundColor: 'rgba(255, 255, 255, 0.15)' // Lighter hover for user icon
+                  backgroundColor: 'rgba(255, 255, 255, 0.15)'
                 } 
               }}
             >
@@ -743,20 +903,17 @@ const Header = () => {
           </Box>
         </Toolbar>
       </AppBar>
-      <Toolbar /> {/* Add an empty Toolbar to create space */}
+      <Toolbar />
       <Drawer
         variant="temporary"
         open={drawerOpen}
         onClose={handleDrawerToggle}
         ModalProps={{
-          keepMounted: true, // Better mobile performance
+          keepMounted: true,
         }}
         sx={{
           '& .MuiDrawer-paper': { width: 250 },
-          '& .MuiBackdrop-root': { 
-            // Increase backdrop z-index to ensure it's above all menus
-            zIndex: theme.zIndex.drawer - 1
-          }
+          '& .MuiBackdrop-root': { zIndex: theme.zIndex.drawer - 1 },
         }}
       >
         {drawer}

@@ -1,8 +1,11 @@
 import React from 'react';
 import { Box, Typography, Link, Container, Divider } from '@mui/material';
-import { Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink, useLocation } from 'react-router-dom'; // Import useLocation
 
 const Footer = () => {
+  const location = useLocation(); // Get current location
+  const isTrainingSystem = location.pathname.startsWith('/training'); // Check if path starts with /training
+
   return (
     <Box 
       component="footer" 
@@ -29,7 +32,10 @@ const Footer = () => {
             align="center"
             sx={{ mb: { xs: 1, sm: 0 } }}
           >
-            © {new Date().getFullYear()} PM Management System
+            {/* Conditionally render copyright text */}
+            {isTrainingSystem 
+              ? '© 2025 PM Training System' 
+              : '© 2025 PM Management System'}
           </Typography>
           
           <Box 

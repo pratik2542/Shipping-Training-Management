@@ -7,6 +7,7 @@ import Box from '@mui/material/Box';
 import { auth } from './firebase/config';
 import { testAuth } from './firebase/testConfig';
 import { AdminRoute } from './utils/adminCheck';
+import { ManagerRoute } from './utils/userRoles'; // Keep ManagerRoute
 import ScrollToTop from './components/ScrollToTop';
 import SessionTimeoutProvider from './components/SessionTimeoutProvider';
 import { initializeItemMasterData } from './utils/itemMasterData';
@@ -33,6 +34,12 @@ const ItemMasterTable = React.lazy(() => import('./components/ItemMasterTable'))
 const Terms = React.lazy(() => import('./components/Terms'));
 const Privacy = React.lazy(() => import('./components/Privacy'));
 const Help = React.lazy(() => import('./components/Help'));
+const TrainingDashboard = React.lazy(() => import('./components/TrainingDashboard')); // Import TrainingDashboard
+const TrainingRecords = React.lazy(() => import('./components/TrainingRecords'));
+const SelfTrainingForm = React.lazy(() => import('./components/SelfTrainingForm'));
+const InClassTrainingForm = React.lazy(() => import('./components/InClassTrainingForm'));
+const ApproveTraining = React.lazy(() => import('./components/ApproveTraining')); // Import ApproveTraining
+const AllTrainingRecords = React.lazy(() => import('./components/AllTrainingRecords')); // Import AllTrainingRecords
 
 function App() {
   // Add error logging
@@ -50,18 +57,52 @@ function App() {
     }
   }, []);
 
-  const ProtectedRoute = ({ children }) => {
+  // Modified ProtectedRoute
+  const ProtectedRoute = ({ children, requiredAccess }) => {
     const isTestUser = localStorage.getItem('isTestUser') === 'true';
     const authInstance = isTestUser ? testAuth : auth;
-    return authInstance.currentUser ? (
-      // Wrap protected routes with SessionTimeoutProvider and Layout
+    const user = authInstance.currentUser;
+    const isAdmin = localStorage.getItem('isAdmin') === 'true';
+    const accessLevel = localStorage.getItem('accessLevel'); // 'shipping', 'training', or 'both'
+
+    if (!user) {
+      return <Navigate to="/" />;
+    }
+
+    // Admins have access to everything
+    if (isAdmin) {
+      return (
+        <SessionTimeoutProvider timeoutMinutes={15}>
+          <Layout>
+            {children}
+          </Layout>
+        </SessionTimeoutProvider>
+      );
+    }
+
+    // Check required access if specified
+    if (requiredAccess) {
+      const hasAccess = accessLevel === 'both' || accessLevel === requiredAccess;
+      if (!hasAccess) {
+        // Redirect based on the user's actual access level
+        if (accessLevel === 'shipping') {
+          return <Navigate to="/dashboard" />; // Redirect to main dashboard
+        } else if (accessLevel === 'training') {
+          return <Navigate to="/training" />; // Redirect to training dashboard
+        } else {
+          // If access level is somehow invalid or missing, redirect to login
+          return <Navigate to="/" />;
+        }
+      }
+    }
+
+    // If authenticated and access is granted (or no specific access required)
+    return (
       <SessionTimeoutProvider timeoutMinutes={15}>
         <Layout>
           {children}
         </Layout>
       </SessionTimeoutProvider>
-    ) : (
-      <Navigate to="/" />
     );
   };
 
@@ -85,6 +126,8 @@ function App() {
           <Routes>
             {/* Public routes - no Layout */}
             <Route path="/" element={<Login />} />
+            {/* Add new route for training login */}
+            <Route path="/login/training" element={<Login isTrainingLogin={true} />} />
             <Route path="/reset-password" element={<PasswordReset />} />
             <Route path="/pending-status" element={<PendingStatus />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
@@ -94,10 +137,11 @@ function App() {
             <Route path="/help" element={<Help />} />
             
             {/* Protected routes with Layout */}
+            {/* Shipping System Routes (require 'shipping' or 'both') */}
             <Route
               path="/dashboard"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredAccess="shipping">
                   <Dashboard />
                 </ProtectedRoute>
               }
@@ -106,7 +150,7 @@ function App() {
             <Route
               path="/shipment"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredAccess="shipping">
                   <Shipment />
                 </ProtectedRoute>
               }
@@ -114,7 +158,7 @@ function App() {
             <Route
               path="/shipping-form"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredAccess="shipping">
                   <ShippingForm />
                 </ProtectedRoute>
               }
@@ -122,7 +166,7 @@ function App() {
             <Route
               path="/records"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredAccess="shipping">
                   <Records />
                 </ProtectedRoute>
               }
@@ -130,7 +174,7 @@ function App() {
             <Route
               path="/manufacturing"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredAccess="shipping">
                   <Manufacturing />
                 </ProtectedRoute>
               }
@@ -138,7 +182,7 @@ function App() {
             <Route
               path="/manufacturing/:formType"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredAccess="shipping">
                   <Manufacturing />
                 </ProtectedRoute>
               }
@@ -146,7 +190,7 @@ function App() {
             <Route
               path="/manufacturing/vitamin-d"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredAccess="shipping">
                   <VitaminDForm />
                 </ProtectedRoute>
               }
@@ -154,7 +198,7 @@ function App() {
             <Route
               path="/manufacturing/menthol"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredAccess="shipping">
                   <MentholForm />
                 </ProtectedRoute>
               }
@@ -162,7 +206,7 @@ function App() {
             <Route
               path="/manufacturing/dha"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredAccess="shipping">
                   <DhaForm />
                 </ProtectedRoute>
               }
@@ -170,7 +214,7 @@ function App() {
             <Route
               path="/manufacturing/tummy-relief"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredAccess="shipping">
                   <TummyReliefForm />
                 </ProtectedRoute>
               }
@@ -178,11 +222,79 @@ function App() {
             <Route
               path="/manufacturing/vitamin-d-k"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredAccess="shipping">
                   <VitaminDKForm />
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/item-master"
+              element={
+                <ProtectedRoute requiredAccess="shipping">
+                  <ItemMasterTable />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Training System Routes (require 'training' or 'both') */}
+            <Route
+              path="/training"
+              element={
+                <ProtectedRoute requiredAccess="training">
+                  <TrainingDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/training/records"
+              element={
+                <ProtectedRoute requiredAccess="training">
+                  <TrainingRecords />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/training/self-training-form"
+              element={
+                <ProtectedRoute requiredAccess="training">
+                  <SelfTrainingForm />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Manager Only Training Routes (ManagerRoute handles manager check + training access) */}
+            <Route
+              path="/training/approve"
+              element={
+                <ManagerRoute>
+                  <Layout>
+                    <ApproveTraining />
+                  </Layout>
+                </ManagerRoute>
+              }
+            />
+            <Route
+              path="/training/all-records"
+              element={
+                <ManagerRoute>
+                  <Layout>
+                    <AllTrainingRecords />
+                  </Layout>
+                </ManagerRoute>
+              }
+            />
+            <Route
+              path="/training/in-class-training-form"
+              element={
+                <ManagerRoute>
+                  <Layout>
+                    <InClassTrainingForm />
+                  </Layout>
+                </ManagerRoute>
+              }
+            />
+
+            {/* Admin Only Route */}
             <Route
               path="/admin/verify"
               element={
@@ -191,14 +303,6 @@ function App() {
                     <AdminVerification />
                   </Layout>
                 </AdminRoute>
-              }
-            />
-            <Route
-              path="/item-master"
-              element={
-                <ProtectedRoute>
-                  <ItemMasterTable />
-                </ProtectedRoute>
               }
             />
           </Routes>
