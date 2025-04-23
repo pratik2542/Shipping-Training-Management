@@ -75,6 +75,7 @@ const Header = () => {
   const isShipping = !isTrainingSystem;
   const [isUserManager, setIsUserManager] = useState(false);
   const [pendingTrainingCount, setPendingTrainingCount] = useState(0);
+  const [userAccessLevel, setUserAccessLevel] = useState('both');
 
   useEffect(() => {
     const checkAdmin = () => {
@@ -113,6 +114,9 @@ const Header = () => {
 
     checkAdmin();
     getUserName();
+
+    const storedAccessLevel = localStorage.getItem('accessLevel') || 'both';
+    setUserAccessLevel(storedAccessLevel);
   }, []);
 
   useEffect(() => {
@@ -601,21 +605,26 @@ const Header = () => {
           </>
         )}
 
-        <Divider sx={{ my: 1 }} />
-        <ListItem
-          button
-          onClick={() => {
-            handleDrawerItemClick(isTrainingSystem ? '/dashboard' : '/training');
-          }}
-        >
-          <ListItemIcon sx={{ color: 'secondary.main' }}>
-            {isTrainingSystem ? <BusinessCenterIcon /> : <SchoolIcon />}
-          </ListItemIcon>
-          <ListItemText
-            primary={isTrainingSystem ? 'Shipping System' : 'Training System'}
-            primaryTypographyProps={{ color: 'secondary.main' }}
-          />
-        </ListItem>
+        {userAccessLevel === 'both' && (
+          <>
+            <Divider sx={{ my: 1 }} />
+            <ListItem
+              button
+              onClick={() => {
+                handleDrawerItemClick(isTrainingSystem ? '/dashboard' : '/training');
+              }}
+            >
+              <ListItemIcon sx={{ color: 'secondary.main' }}>
+                {isTrainingSystem ? <BusinessCenterIcon /> : <SchoolIcon />}
+              </ListItemIcon>
+              <ListItemText
+                primary={isTrainingSystem ? 'Shipping System' : 'Training System'}
+                primaryTypographyProps={{ color: 'secondary.main' }}
+              />
+            </ListItem>
+          </>
+        )}
+
         <ListItem button onClick={handleLogout}>
           <ListItemIcon sx={{ color: 'error.main' }}>
             <LogoutIcon />
@@ -822,7 +831,7 @@ const Header = () => {
                 </>
               )}
 
-              {(isAdmin || isUserManager) && (
+              {userAccessLevel === 'both' && (
                 <>
                   {isShipping && (
                     <Button
