@@ -9,9 +9,9 @@ import {
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-//import { doc, getDoc } from 'firebase/firestore'; // Changed import
 import { db } from '../firebase/config';
 import { collection, query, where, getDocs } from 'firebase/firestore';
+
 const CheckStatus = () => {
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
@@ -36,10 +36,51 @@ const CheckStatus = () => {
         // Query Firestore for documents where email == normalizedEmail
         const userRequestsRef = collection(db, 'userRequests');
         const q = query(userRequestsRef, where('email', '==', normalizedEmail));
+        
+        console.log('Running query:', JSON.stringify(q._query, null, 2));
+        
         const querySnapshot = await getDocs(q);
-      
+        
+        console.log('Query returned', querySnapshot.size, 'documents');
+        
         if (querySnapshot.empty) {
-          setError('No registration request found for this email');
+          // Try a case-insensitive approach as a fallback
+          console.log('Attempting case-insensitive search as fallback...');
+          
+          // Get all user requests and filter manually (inefficient but can help in testing)
+          try {
+            const allRequestsQuery = query(collection(db, 'userRequests'));
+            const allRequestsSnapshot = await getDocs(allRequestsQuery);
+            
+            console.log('Retrieved', allRequestsSnapshot.size, 'total user requests');
+            
+            // Find any email that matches case-insensitively
+            const matchingDocs = allRequestsSnapshot.docs.filter(doc => {
+              const requestEmail = doc.data().email;
+              return requestEmail && requestEmail.toLowerCase() === normalizedEmail;
+            });
+            
+            if (matchingDocs.length > 0) {
+              console.log('Found matching document with case-insensitive check:', matchingDocs[0].data());
+              const userData = matchingDocs[0].data();
+              
+              navigate('/pending-status', {
+                state: {
+                  email: normalizedEmail,
+                  status: userData.status || 'pending',
+                  createdAt: userData.createdAt,
+                  note: 'Found via case-insensitive search'
+                }
+              });
+              return;
+            } else {
+              console.log('No matching documents found even with case-insensitive search');
+            }
+          } catch (fallbackError) {
+            console.error('Error during fallback search:', fallbackError);
+          }
+          
+          setError('No registration request found for this email. Please check the email address you registered with.');
           setIsLoading(false);
           return;
         }
