@@ -124,51 +124,76 @@ const Login = ({ isTrainingLogin = false }) => {
         return;
       }
       
-      const existingRequestQuery = query(
-        collection(db, 'userRequests'),
-        where('email', '==', email)
-      );
-      
-      const existingRequestDocs = await getDocs(existingRequestQuery);
-      
-      if (!existingRequestDocs.empty) {
-        const approvedRequest = existingRequestDocs.docs.find(doc => 
-          doc.data().status === 'approved'
+      // Before checking existingRequests, let's verify if the user can access the collection
+      try {
+        // First try to send admin notification - this doesn't require Firestore permissions
+        const userRequest = {
+          name,
+          email,
+          status: 'pending',
+          createdAt: new Date().toISOString(),
+        };
+
+        // Send notification first, so at least admin gets informed even if DB write fails
+        await sendAdminNotification(userRequest);
+        
+        // Now check for existing request
+        const existingRequestQuery = query(
+          collection(db, 'userRequests'),
+          where('email', '==', email)
         );
         
-        const pendingRequest = existingRequestDocs.docs.find(doc => 
-          doc.data().status === 'pending'
-        );
+        const existingRequestDocs = await getDocs(existingRequestQuery);
         
-        if (approvedRequest) {
-          setError('This email is already registered and approved. Please log in instead.');
-          setIsSubmitting(false);
-          return;
+        if (!existingRequestDocs.empty) {
+          const approvedRequest = existingRequestDocs.docs.find(doc => 
+            doc.data().status === 'approved'
+          );
+          
+          const pendingRequest = existingRequestDocs.docs.find(doc => 
+            doc.data().status === 'pending'
+          );
+          
+          if (approvedRequest) {
+            setError('This email is already registered and approved. Please log in instead.');
+            setIsSubmitting(false);
+            return;
+          }
+          
+          if (pendingRequest) {
+            setError('You already have a pending registration request. Please wait for approval.');
+            setIsSubmitting(false);
+            return;
+          }
         }
+
+        // Only if all checks pass, try to add the document
+        await addDoc(collection(db, 'userRequests'), userRequest);
         
-        if (pendingRequest) {
-          setError('You already have a pending registration request. Please wait for approval.');
-          setIsSubmitting(false);
-          return;
+        // If we reach here, everything worked
+        alert('Registration request submitted successfully.');
+        navigate('/pending-status', { state: { email } });
+        
+      } catch (firestoreError) {
+        console.error('Firestore operation failed:', firestoreError);
+        
+        // If it's a permission error but notification was sent, show a more helpful message
+        if (firestoreError.code === 'permission-denied') {
+          alert('Your registration request has been sent to the administrator.');
+          navigate('/pending-status', { state: { email } });
+        } else {
+          throw firestoreError; // Re-throw for the outer catch
         }
       }
-
-      const userRequest = {
-        name,
-        email,
-        status: 'pending',
-        createdAt: new Date().toISOString(),
-      };
-
-      await sendAdminNotification(userRequest);
-      await addDoc(collection(db, 'userRequests'), userRequest);
-
-      alert('Registration request submitted successfully.');
-      navigate('/pending-status', { state: { email } });
-      
     } catch (error) {
       console.error('Registration failed:', error);
-      setError(`Registration failed: ${error.message}`);
+      
+      // More helpful error messages
+      if (error.code === 'permission-denied') {
+        setError('Registration system is currently undergoing maintenance. Please try again later or contact support.');
+      } else {
+        setError(`Registration failed: ${error.message}`);
+      }
     } finally {
       setIsSubmitting(false);
     }

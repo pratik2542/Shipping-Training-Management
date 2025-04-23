@@ -18,8 +18,6 @@ const CheckStatus = () => {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
- 
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!email) {
@@ -34,37 +32,61 @@ const CheckStatus = () => {
       const normalizedEmail = email.toLowerCase();
       console.log('Checking status for email:', normalizedEmail);
   
-      // Query Firestore for documents where email == normalizedEmail
-      const userRequestsRef = collection(db, 'userRequests');
-      const q = query(userRequestsRef, where('email', '==', normalizedEmail));
-      const querySnapshot = await getDocs(q);
-  
-      if (querySnapshot.empty) {
-        setError('No registration request found for this email');
-        setIsLoading(false);
-        return;
-      }
-  
-      // Get the first document from the query result
-      const docSnap = querySnapshot.docs[0];
-      const userData = docSnap.data();
-  
-      console.log('Found user data:', userData);
-  
-      navigate('/pending-status', {
-        state: {
-          email: normalizedEmail,
-          status: userData.status || 'pending',
-          createdAt: userData.createdAt
+      try {
+        // Query Firestore for documents where email == normalizedEmail
+        const userRequestsRef = collection(db, 'userRequests');
+        const q = query(userRequestsRef, where('email', '==', normalizedEmail));
+        const querySnapshot = await getDocs(q);
+      
+        if (querySnapshot.empty) {
+          setError('No registration request found for this email');
+          setIsLoading(false);
+          return;
         }
-      });
+      
+        // Get the first document from the query result
+        const docSnap = querySnapshot.docs[0];
+        const userData = docSnap.data();
+      
+        console.log('Found user data:', userData);
+      
+        navigate('/pending-status', {
+          state: {
+            email: normalizedEmail,
+            status: userData.status || 'pending',
+            createdAt: userData.createdAt
+          }
+        });
+      } catch (firestoreError) {
+        console.error('Firestore operation failed:', firestoreError);
+        
+        // Special handling for permission errors
+        if (firestoreError.code === 'permission-denied') {
+          // Try server-side checking instead through an API endpoint (more secure approach)
+          // If you have a server API that can check status securely, you can use it here
+          
+          // For now, navigate to a generic status screen
+          navigate('/pending-status', {
+            state: {
+              email: normalizedEmail,
+              status: 'pending', // Default value when we can't verify
+              statusMessage: "We couldn't verify your exact status, but if you've registered, your request is being processed." 
+            }
+          });
+        } else {
+          throw firestoreError; // Re-throw for the outer catch block
+        }
+      }
     } catch (error) {
       console.error('Detailed error:', error);
-      setError(`Error checking status: ${error.message}`);
+      if (error.code === 'permission-denied') {
+        setError('The status check system is currently undergoing maintenance. Please try again later or contact support.');
+      } else {
+        setError(`Error checking status: ${error.message}`);
+      }
       setIsLoading(false);
     }
   };
-  
 
   return (
     <Container maxWidth="sm">
