@@ -174,33 +174,64 @@ const ApproveTraining = () => {
             <Typography color="text.secondary">No pending training records require your approval.</Typography>
           </Paper>
         ) : (
-          <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
-            <Table sx={{ minWidth: { xs: '100%', md: 650 } }}>
+          <TableContainer component={Paper} sx={{ overflowX: 'auto', borderRadius: '4px' }}>
+            <Table sx={{ minWidth: { xs: '100%', md: 650 } }} size={window.innerWidth < 600 ? "small" : "medium"}>
               <TableHead sx={{ backgroundColor: 'primary.light' }}>
                 <TableRow>
                   <TableCell sx={{ fontWeight: 'bold', whiteSpace: 'nowrap', p: { xs: 1, sm: 2 } }}>Trainee</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold', whiteSpace: 'nowrap', p: { xs: 1, sm: 2 } }}>SOP Number</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', whiteSpace: 'nowrap', p: { xs: 1, sm: 2 } }}>SOP</TableCell>
                   <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' }, fontWeight: 'bold' }}>Revision</TableCell>
-                  <TableCell sx={{ display: { xs: 'none', md: 'table-cell' }, fontWeight: 'bold' }}>Date Submitted</TableCell>
+                  <TableCell sx={{ display: { xs: 'none', md: 'table-cell' }, fontWeight: 'bold' }}>Date</TableCell>
                   <TableCell sx={{ fontWeight: 'bold', whiteSpace: 'nowrap', p: { xs: 1, sm: 2 } }}>Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {pendingRecords.map((record) => (
                   <TableRow key={record.docId} sx={{ '&:hover': { backgroundColor: 'action.hover' } }}>
-                    <TableCell sx={{ p: { xs: 1, sm: 2 } }}>{record.traineeName}</TableCell>
-                    <TableCell sx={{ p: { xs: 1, sm: 2 } }}>{record.sopNumber}</TableCell>
+                    <TableCell sx={{ 
+                      p: { xs: 1, sm: 2 },
+                      maxWidth: { xs: '120px', sm: 'auto' },
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: { xs: 'nowrap', sm: 'normal' }
+                    }}>
+                      {record.traineeName}
+                    </TableCell>
+                    <TableCell sx={{ 
+                      p: { xs: 1, sm: 2 },
+                      maxWidth: { xs: '100px', sm: 'auto' },
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: { xs: 'nowrap', sm: 'normal' }
+                    }}>
+                      {record.sopNumber}
+                    </TableCell>
                     <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>{record.revision}</TableCell>
                     <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>{formatDate(record.submittedAt)}</TableCell>
-                    <TableCell sx={{ p: { xs: 1, sm: 2 } }}>
-                      <Box sx={{ display: 'flex', gap: 0.5 }}>
-                        <IconButton color="primary" size="small" onClick={() => handleView(record)} title="View Details">
+                    <TableCell sx={{ p: { xs: 0.5, sm: 1 } }}>
+                      <Box sx={{ display: 'flex', flexWrap: 'nowrap', gap: 0.5 }}>
+                        <IconButton 
+                          color="primary" 
+                          size="small" 
+                          onClick={() => handleView(record)} 
+                          title="View Details"
+                        >
                           <VisibilityIcon fontSize="small" />
                         </IconButton>
-                        <IconButton color="success" size="small" onClick={() => handleApproveClick(record)} title="Approve">
+                        <IconButton 
+                          color="success" 
+                          size="small" 
+                          onClick={() => handleApproveClick(record)} 
+                          title="Approve"
+                        >
                           <CheckCircleIcon fontSize="small" />
                         </IconButton>
-                        <IconButton color="error" size="small" onClick={() => handleRejectClick(record)} title="Reject">
+                        <IconButton 
+                          color="error" 
+                          size="small" 
+                          onClick={() => handleRejectClick(record)} 
+                          title="Reject"
+                        >
                           <CancelIcon fontSize="small" />
                         </IconButton>
                       </Box>
@@ -212,6 +243,11 @@ const ApproveTraining = () => {
           </TableContainer>
         )
       )}
+
+      {/* Add a mobile helper text */}
+      <Typography variant="caption" color="text.secondary" sx={{ display: { xs: 'block', md: 'none' }, mt: 1, ml: 1 }}>
+        * Swipe horizontally to see more columns
+      </Typography>
 
       {/* View Dialog */}
       {selectedRecord && (

@@ -17,7 +17,9 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  IconButton
+  IconButton,
+  useMediaQuery,
+  useTheme
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { collection, addDoc, query, orderBy, getDocs, deleteDoc, doc } from 'firebase/firestore';
@@ -33,12 +35,12 @@ import DescriptionIcon from '@mui/icons-material/Description';
 
 const TrainingDashboard = () => {
   const navigate = useNavigate();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [userName, setUserName] = useState('');
   const [isManager, setIsManager] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isTestUser, setIsTestUser] = useState(false);
-  
-  // SOP related states
   const [sopDialogOpen, setSopDialogOpen] = useState(false);
   const [sops, setSops] = useState([]);
   const [newSop, setNewSop] = useState({
@@ -48,18 +50,14 @@ const TrainingDashboard = () => {
   });
 
   useEffect(() => {
-    // Get user info from localStorage
     const storedName = localStorage.getItem('userName');
     const storedManager = localStorage.getItem('isManager') === 'true';
     const storedAdmin = localStorage.getItem('isAdmin') === 'true';
     const storedTestUser = localStorage.getItem('isTestUser') === 'true';
-    
     setUserName(storedName || 'User');
     setIsManager(storedManager);
     setIsAdmin(storedAdmin);
     setIsTestUser(storedTestUser);
-    
-    // Fetch SOPs
     fetchSops();
   }, []);
 
@@ -68,50 +66,40 @@ const TrainingDashboard = () => {
       const isTestUser = localStorage.getItem('isTestUser') === 'true';
       const dbInstance = isTestUser ? testDb : db;
       const collectionName = isTestUser ? 'test_sops' : 'sops';
-      
       const q = query(
         collection(dbInstance, collectionName),
         orderBy('createdAt', 'desc')
       );
-      
       const querySnapshot = await getDocs(q);
       const sopsData = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
-      
       setSops(sopsData);
     } catch (error) {
       console.error('Error fetching SOPs:', error);
-    }
+    } 
   };
 
   const handleAddSop = async () => {
     try {
-      // Basic validation
       if (!newSop.sopNumber || !newSop.title || !newSop.revision) {
         alert('Please fill all required fields');
         return;
       }
-
       const dbInstance = isTestUser ? testDb : db;
       const collectionName = isTestUser ? 'test_sops' : 'sops';
-      
       await addDoc(collection(dbInstance, collectionName), {
         ...newSop,
         createdAt: new Date().toISOString(),
         createdBy: userName
       });
-      
-      // Reset form and close dialog
       setNewSop({
         sopNumber: '',
         title: '',
         revision: ''
       });
       setSopDialogOpen(false);
-      
-      // Refresh SOPs list
       fetchSops();
     } catch (error) {
       console.error('Error adding SOP:', error);
@@ -124,10 +112,7 @@ const TrainingDashboard = () => {
       if (window.confirm('Are you sure you want to delete this SOP?')) {
         const dbInstance = isTestUser ? testDb : db;
         const collectionName = isTestUser ? 'test_sops' : 'sops';
-        
         await deleteDoc(doc(dbInstance, collectionName, id));
-        
-        // Refresh SOPs list
         fetchSops();
       }
     } catch (error) {
@@ -146,7 +131,7 @@ const TrainingDashboard = () => {
 
   return (
     <Container maxWidth="lg">
-      <Box sx={{  mb: 4 }}>
+      <Box sx={{ mb: 4 }}>
         <Typography 
           variant="h4" 
           sx={{ 
@@ -158,18 +143,16 @@ const TrainingDashboard = () => {
         >
           Training Dashboard
         </Typography>
-        
         <Typography variant="h6" sx={{ mb: 3 }}>
           Welcome, {userName}! 
         </Typography>
-
-        <Grid container spacing={3} sx={{ mb: 8 }}>
-          {/* Individual User Training Cards */}
-          <Grid item xs={12} md={6} lg={4} mb={8}>
+        
+        <Grid container spacing={2} sx={{ mb: 6 }}>
+          <Grid item xs={12} sm={6} md={4} lg={4} mb={8}>
             <Paper
               elevation={3}
               sx={{
-                p: 3,
+                p: { xs: 2, sm: 3 },
                 textAlign: 'center',
                 height: '100%',
                 display: 'flex',
@@ -182,8 +165,8 @@ const TrainingDashboard = () => {
               }}
             >
               <Box>
-                <AssignmentIcon sx={{ fontSize: 60, color: 'primary.main', mb: 2 }} />
-                <Typography variant="h6" component="h2" sx={{ mb: 2 }}>
+                <AssignmentIcon sx={{ fontSize: { xs: 40, sm: 60 }, color: 'primary.main', mb: 2 }} />
+                <Typography variant="h6" component="h2" sx={{ mb: 2, fontSize: { xs: '1.1rem', sm: '1.25rem' } }}>
                   My Training Records
                 </Typography>
               </Box>
@@ -192,17 +175,18 @@ const TrainingDashboard = () => {
                 color="primary"
                 onClick={() => navigate('/training/records')}
                 sx={{ mt: 2 }}
+                fullWidth
               >
                 View My Records
               </Button>
             </Paper>
           </Grid>
 
-          <Grid item xs={12} md={6} lg={4} mb={8}>
+          <Grid item xs={12} sm={6} md={4} lg={4} mb={8}>
             <Paper
               elevation={3}
               sx={{
-                p: 3,
+                p: { xs: 2, sm: 3 },
                 textAlign: 'center',
                 height: '100%',
                 display: 'flex',
@@ -215,8 +199,8 @@ const TrainingDashboard = () => {
               }}
             >
               <Box>
-                <PostAddIcon sx={{ fontSize: 60, color: 'primary.main', mb: 2 }} />
-                <Typography variant="h6" component="h2" sx={{ mb: 2 }}>
+                <PostAddIcon sx={{ fontSize: { xs: 40, sm: 60 }, color: 'primary.main', mb: 2 }} />
+                <Typography variant="h6" component="h2" sx={{ mb: 2, fontSize: { xs: '1.1rem', sm: '1.25rem' } }}>
                   Submit Self-Training
                 </Typography>
               </Box>
@@ -225,20 +209,20 @@ const TrainingDashboard = () => {
                 color="primary"
                 onClick={() => navigate('/training/self-training-form')}
                 sx={{ mt: 2 }}
+                fullWidth
               >
                 Submit Training
               </Button>
             </Paper>
           </Grid>
 
-          {/* Manager/Admin Only Section */}
           {(isManager || isAdmin) && (
             <>
-              <Grid item xs={12} md={6} lg={4} mb={8}>
+              <Grid item xs={12} sm={6} md={4} lg={4} mb={8}>
                 <Paper
                   elevation={3}
                   sx={{
-                    p: 3,
+                    p: { xs: 2, sm: 3 },
                     textAlign: 'center',
                     height: '100%',
                     display: 'flex',
@@ -252,8 +236,8 @@ const TrainingDashboard = () => {
                   }}
                 >
                   <Box>
-                    <ApprovalIcon sx={{ fontSize: 60, color: 'primary.main', mb: 2 }} />
-                    <Typography variant="h6" component="h2" sx={{ mb: 2 }}>
+                    <ApprovalIcon sx={{ fontSize: { xs: 40, sm: 60 }, color: 'primary.main', mb: 2 }} />
+                    <Typography variant="h6" component="h2" sx={{ mb: 2, fontSize: { xs: '1.1rem', sm: '1.25rem' } }}>
                       Approve Training
                     </Typography>
                   </Box>
@@ -262,17 +246,18 @@ const TrainingDashboard = () => {
                     color="primary"
                     onClick={() => navigate('/training/approve')}
                     sx={{ mt: 2 }}
+                    fullWidth
                   >
                     Approve Requests
                   </Button>
                 </Paper>
               </Grid>
 
-              <Grid item xs={12} md={6} lg={4} mb={8}>
+              <Grid item xs={12} sm={6} md={4} lg={4} mb={8}>
                 <Paper
                   elevation={3}
                   sx={{
-                    p: 3,
+                    p: { xs: 2, sm: 3 },
                     textAlign: 'center',
                     height: '100%',
                     display: 'flex',
@@ -286,8 +271,8 @@ const TrainingDashboard = () => {
                   }}
                 >
                   <Box>
-                    <ViewListIcon sx={{ fontSize: 60, color: 'primary.main', mb: 2 }} />
-                    <Typography variant="h6" component="h2" sx={{ mb: 2 }}>
+                    <ViewListIcon sx={{ fontSize: { xs: 40, sm: 60 }, color: 'primary.main', mb: 2 }} />
+                    <Typography variant="h6" component="h2" sx={{ mb: 2, fontSize: { xs: '1.1rem', sm: '1.25rem' } }}>
                       All Training Records
                     </Typography>
                   </Box>
@@ -296,17 +281,18 @@ const TrainingDashboard = () => {
                     color="primary"
                     onClick={() => navigate('/training/all-records')}
                     sx={{ mt: 2 }}
+                    fullWidth
                   >
                     View All Records
                   </Button>
                 </Paper>
               </Grid>
 
-              <Grid item xs={12} md={6} lg={4} mb={8}>
+              <Grid item xs={12} sm={6} md={4} lg={4} mb={8}>
                 <Paper
                   elevation={3}
                   sx={{
-                    p: 3,
+                    p: { xs: 2, sm: 3 },
                     textAlign: 'center',
                     height: '100%',
                     display: 'flex',
@@ -320,8 +306,8 @@ const TrainingDashboard = () => {
                   }}
                 >
                   <Box>
-                    <ClassIcon sx={{ fontSize: 60, color: 'primary.main', mb: 2 }} />
-                    <Typography variant="h6" component="h2" sx={{ mb: 2 }}>
+                    <ClassIcon sx={{ fontSize: { xs: 40, sm: 60 }, color: 'primary.main', mb: 2 }} />
+                    <Typography variant="h6" component="h2" sx={{ mb: 2, fontSize: { xs: '1.1rem', sm: '1.25rem' } }}>
                       Submit In-Class Training
                     </Typography>
                   </Box>
@@ -330,6 +316,7 @@ const TrainingDashboard = () => {
                     color="primary"
                     onClick={() => navigate('/training/in-class-training-form')}
                     sx={{ mt: 2 }}
+                    fullWidth
                   >
                     Submit Class
                   </Button>
@@ -339,35 +326,43 @@ const TrainingDashboard = () => {
           )}
         </Grid>
 
-        {/* SOP Management Section for Managers and Admins */}
         {(isManager || isAdmin || isTestUser) && (
           <Box sx={{ mt: 5 }}>
-            <Paper elevation={3} sx={{ p: 3 }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+            <Paper elevation={3} sx={{ p: { xs: 2, sm: 3 } }}>
+              <Box sx={{ 
+                display: 'flex', 
+                flexDirection: { xs: 'column', sm: 'row' },
+                justifyContent: 'space-between', 
+                alignItems: { xs: 'flex-start', sm: 'center' }, 
+                mb: 3,
+                gap: { xs: 2, sm: 0 }
+              }}> 
                 <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                  <DescriptionIcon sx={{ fontSize: 30, color: 'primary.main', mr: 1 }} />
-                  <Typography variant="h5">SOP Management</Typography>
+                  <DescriptionIcon sx={{ fontSize: { xs: 24, sm: 30 }, color: 'primary.main', mr: 1 }} />
+                  <Typography variant="h5" sx={{ fontSize: { xs: '1.2rem', sm: '1.5rem' } }}>SOP Management</Typography>
                 </Box>
                 <Button 
                   variant="contained" 
                   color="primary" 
                   onClick={() => setSopDialogOpen(true)}
                   startIcon={<PostAddIcon />}
+                  size="medium"
+                  fullWidth={isMobile}
                 >
-                  Add New SOP
+                  Add New SOP 
                 </Button>
               </Box>
 
-              <TableContainer component={Paper} sx={{ mt: 2 }}>
-                <Table>
+              <TableContainer component={Paper} sx={{ mt: 2, overflowX: 'auto' }}>
+                <Table size={isMobile ? "small" : "medium"}>
                   <TableHead>
                     <TableRow sx={{ backgroundColor: 'primary.main' }}>
-                      <TableCell sx={{ color: 'white', fontWeight: 600 }}>ID</TableCell>
-                      <TableCell sx={{ color: 'white', fontWeight: 600 }}>SOP Number</TableCell>
-                      <TableCell sx={{ color: 'white', fontWeight: 600 }}>Title</TableCell>
-                      <TableCell sx={{ color: 'white', fontWeight: 600 }}>Revision</TableCell>
-                      <TableCell sx={{ color: 'white', fontWeight: 600 }}>Created By</TableCell>
-                      <TableCell sx={{ color: 'white', fontWeight: 600 }}>Actions</TableCell>
+                      <TableCell sx={{ color: 'white', fontWeight: 600, p: { xs: 1, sm: 2 }, display: { xs: 'none', sm: 'table-cell' } }}>ID</TableCell>
+                      <TableCell sx={{ color: 'white', fontWeight: 600, p: { xs: 1, sm: 2 } }}>SOP Number</TableCell>
+                      <TableCell sx={{ color: 'white', fontWeight: 600, p: { xs: 1, sm: 2 } }}>Title</TableCell>
+                      <TableCell sx={{ color: 'white', fontWeight: 600, p: { xs: 1, sm: 2 }, display: { xs: 'none', md: 'table-cell' } }}>Revision</TableCell>
+                      <TableCell sx={{ color: 'white', fontWeight: 600, p: { xs: 1, sm: 2 }, display: { xs: 'none', md: 'table-cell' } }}>Created By</TableCell>
+                      <TableCell sx={{ color: 'white', fontWeight: 600, p: { xs: 1, sm: 2 } }}>Actions</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -379,19 +374,20 @@ const TrainingDashboard = () => {
                       </TableRow>
                     ) : (
                       sops.map((sop, index) => (
-                        <TableRow key={sop.id}>
-                          <TableCell>{index + 1}</TableCell>
-                          <TableCell>{sop.sopNumber}</TableCell>
-                          <TableCell>{sop.title}</TableCell>
-                          <TableCell>{sop.revision}</TableCell>
-                          <TableCell>{sop.createdBy || 'N/A'}</TableCell>
-                          <TableCell>
+                        <TableRow key={sop.id} hover>
+                          <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' }, p: { xs: 1, sm: 2 } }}>{index + 1}</TableCell>
+                          <TableCell sx={{ p: { xs: 1, sm: 2 } }}>{sop.sopNumber}</TableCell>
+                          <TableCell sx={{ p: { xs: 1, sm: 2 } }}>{sop.title}</TableCell>
+                          <TableCell sx={{ display: { xs: 'none', md: 'table-cell' }, p: { xs: 1, sm: 2 } }}>{sop.revision}</TableCell>
+                          <TableCell sx={{ display: { xs: 'none', md: 'table-cell' }, p: { xs: 1, sm: 2 } }}>{sop.createdBy || 'N/A'}</TableCell>
+                          <TableCell sx={{ p: { xs: 1, sm: 2 } }}>
                             <IconButton
                               color="error"
                               onClick={() => handleDeleteSop(sop.id)}
                               title="Delete SOP"
+                              size="small"
                             >
-                              <DeleteIcon />
+                              <DeleteIcon fontSize="small" />
                             </IconButton>
                           </TableCell>
                         </TableRow>
@@ -400,6 +396,10 @@ const TrainingDashboard = () => {
                   </TableBody>
                 </Table>
               </TableContainer>
+
+              <Typography variant="caption" color="text.secondary" sx={{ display: { xs: 'block', md: 'none' }, mt: 2 }}>
+                * Swipe horizontally to see all details.
+              </Typography>
 
               {isTestUser && (
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2, textAlign: 'center' }}>
@@ -410,11 +410,15 @@ const TrainingDashboard = () => {
           </Box>
         )}
 
-        {/* Add SOP Dialog */}
-        <Dialog open={sopDialogOpen} onClose={() => setSopDialogOpen(false)} maxWidth="sm" fullWidth>
-          <DialogTitle>Add New SOP</DialogTitle>
-          <DialogContent>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
+        <Dialog 
+          open={sopDialogOpen} 
+          onClose={() => setSopDialogOpen(false)} 
+          maxWidth="sm" 
+          fullWidth
+        >
+          <DialogTitle sx={{ px: { xs: 2, sm: 3 }, pt: { xs: 2, sm: 3 } }}>Add New SOP</DialogTitle>
+          <DialogContent sx={{ px: { xs: 2, sm: 3 } }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               <TextField
                 fullWidth
                 required
@@ -422,6 +426,7 @@ const TrainingDashboard = () => {
                 name="sopNumber"
                 value={newSop.sopNumber}
                 onChange={handleSopInputChange}
+                size={isMobile ? "small" : "medium"}
               />
               <TextField
                 fullWidth
@@ -430,6 +435,7 @@ const TrainingDashboard = () => {
                 name="title"
                 value={newSop.title}
                 onChange={handleSopInputChange}
+                size={isMobile ? "small" : "medium"}
               />
               <TextField
                 fullWidth
@@ -439,12 +445,26 @@ const TrainingDashboard = () => {
                 value={newSop.revision}
                 onChange={handleSopInputChange}
                 placeholder="e.g., 1.0, A, etc."
+                size={isMobile ? "small" : "medium"}
               />
             </Box>
           </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setSopDialogOpen(false)}>Cancel</Button>
-            <Button variant="contained" color="primary" onClick={handleAddSop}>Add SOP</Button>
+          <DialogActions sx={{ px: { xs: 2, sm: 3 }, pb: { xs: 2, sm: 3 }, flexDirection: { xs: 'column', sm: 'row' }, alignItems: 'stretch' }}>
+            <Button 
+              onClick={() => setSopDialogOpen(false)} 
+              fullWidth={isMobile}
+              sx={{ mb: { xs: 1, sm: 0 } }}
+            >
+              Cancel
+            </Button>
+            <Button 
+              variant="contained" 
+              color="primary" 
+              onClick={handleAddSop} 
+              fullWidth={isMobile}
+            >
+              Add SOP
+            </Button>
           </DialogActions>
         </Dialog>
       </Box>
