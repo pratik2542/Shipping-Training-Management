@@ -66,10 +66,13 @@ const Header = () => {
   const [adminMenuAnchor, setAdminMenuAnchor] = useState(null);
   const [adminSubMenuExpanded, setAdminSubMenuExpanded] = useState(false);
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const isMobile = useMediaQuery(theme.breakpoints.down('lg'));
   const [shipmentMenuOpen, setShipmentMenuOpen] = useState(false);
   const [shipmentMenuAnchor, setShipmentMenuAnchor] = useState(null);
   const [shipmentSubMenuExpanded, setShipmentSubMenuExpanded] = useState(false);
+  const [trainingsMenuOpen, setTrainingsMenuOpen] = useState(false);
+  const [trainingsMenuAnchor, setTrainingsMenuAnchor] = useState(null);
+  const [trainingsSubMenuExpanded, setTrainingsSubMenuExpanded] = useState(false);
   const isTrainingSystem = location.pathname.startsWith('/training') || 
                           location.search.includes('system=training');
   const isShipping = !isTrainingSystem;
@@ -160,10 +163,13 @@ const Header = () => {
   const resetAllMenus = useCallback(() => {
     setShipmentSubMenuExpanded(false);
     setAdminSubMenuExpanded(false);
+    setTrainingsSubMenuExpanded(false);
     setShipmentMenuOpen(false);
     setAdminMenuOpen(false);
+    setTrainingsMenuOpen(false);
     setShipmentMenuAnchor(null);
     setAdminMenuAnchor(null);
+    setTrainingsMenuAnchor(null);
   }, []);
 
   const handleDrawerToggle = () => {
@@ -257,31 +263,40 @@ const Header = () => {
       icon: <DashboardIcon />
     },
     {
-      title: 'My Trainings',
-      path: '/training/records',
-      icon: <HistoryIcon />
-    },
-    {
-      title: 'Self Training',
-      path: '/training/self-training-form',
-      icon: <AssignmentIcon />
+      title: 'Trainings',
+      path: '/trainings',
+      icon: <AssignmentIcon />,
+      subItems: [
+        {
+          title: 'My Training Records',
+          path: '/training/records',
+          icon: <HistoryIcon fontSize="small" />
+        },
+        {
+          title: 'Self Training',
+          path: '/training/self-training-form',
+          icon: <AssignmentIcon fontSize="small" />
+        },
+        ...(isAdmin || isUserManager ? [
+          {
+            title: 'In-Class Training',
+            path: '/training/in-class-training-form',
+            icon: <GroupIcon fontSize="small" />
+          },
+          {
+            title: 'All Training Records',
+            path: '/training/all-records',
+            icon: <ListAltIcon fontSize="small" />
+          }
+        ] : [])
+      ]
     },
     ...(isAdmin || isUserManager ? [
-      {
-        title: 'In-Class Training',
-        path: '/training/in-class-training-form',
-        icon: <GroupIcon />
-      },
       {
         title: 'Approve Training',
         path: '/training/approve',
         icon: <PlaylistAddCheckIcon />,
         badgeCount: pendingTrainingCount
-      },
-      {
-        title: 'All Training Records',
-        path: '/training/all-records',
-        icon: <ListAltIcon />
       }
     ] : [])
   ];
@@ -341,10 +356,13 @@ const Header = () => {
     setAdminSubMenuExpanded(!adminSubMenuExpanded);
     if (!adminSubMenuExpanded) {
       setShipmentSubMenuExpanded(false);
+      setTrainingsSubMenuExpanded(false);
       setShipmentMenuOpen(false);
       setAdminMenuOpen(false);
+      setTrainingsMenuOpen(false);
       setShipmentMenuAnchor(null);
       setAdminMenuAnchor(null);
+      setTrainingsMenuAnchor(null);
     }
   };
 
@@ -374,10 +392,49 @@ const Header = () => {
     setShipmentSubMenuExpanded(!shipmentSubMenuExpanded);
     if (!shipmentSubMenuExpanded) {
       setAdminSubMenuExpanded(false);
+      setTrainingsSubMenuExpanded(false);
       setShipmentMenuOpen(false);
       setAdminMenuOpen(false);
+      setTrainingsMenuOpen(false);
       setShipmentMenuAnchor(null);
       setAdminMenuAnchor(null);
+      setTrainingsMenuAnchor(null);
+    }
+  };
+
+  const handleTrainingsHover = (event) => {
+    setTrainingsMenuAnchor(event.currentTarget);
+    setTrainingsMenuOpen(true);
+  };
+
+  const handleTrainingsLeave = () => {
+    setTrainingsMenuOpen(false);
+  };
+
+  const handleTrainingsClick = () => {
+    navigate('/training/self-training-form');
+    setTrainingsMenuOpen(false);
+    setTrainingsMenuAnchor(null);
+  };
+
+  const handleTrainingsMenuItemClick = (path) => {
+    navigate(path);
+    setTrainingsMenuOpen(false);
+    setTrainingsMenuAnchor(null);
+  };
+
+  const toggleTrainingsSubmenu = (event) => {
+    event.stopPropagation();
+    setTrainingsSubMenuExpanded(!trainingsSubMenuExpanded);
+    if (!trainingsSubMenuExpanded) {
+      setShipmentSubMenuExpanded(false);
+      setAdminSubMenuExpanded(false);
+      setShipmentMenuOpen(false);
+      setAdminMenuOpen(false);
+      setTrainingsMenuOpen(false);
+      setShipmentMenuAnchor(null);
+      setAdminMenuAnchor(null);
+      setTrainingsMenuAnchor(null);
     }
   };
 
@@ -423,8 +480,16 @@ const Header = () => {
         {currentNavigationItems.map((item) => {
           if (item.subItems) {
             const isActive = location.pathname === item.path || item.subItems.some(sub => location.pathname === sub.path);
-            const isExpanded = item.title === 'Shipment' ? shipmentSubMenuExpanded : false;
-            const toggleSubmenu = item.title === 'Shipment' ? toggleShipmentSubmenu : () => {};
+            let isExpanded = false;
+            let toggleSubmenu = () => {};
+            
+            if (item.title === 'Shipment') {
+              isExpanded = shipmentSubMenuExpanded;
+              toggleSubmenu = toggleShipmentSubmenu;
+            } else if (item.title === 'Trainings') {
+              isExpanded = trainingsSubMenuExpanded;
+              toggleSubmenu = toggleTrainingsSubmenu;
+            }
 
             return (
               <React.Fragment key={item.path}>
@@ -659,7 +724,11 @@ const Header = () => {
               <MenuIcon />
             </IconButton>
           )}
-          <Typography variant="h6" component="div" sx={{ flexGrow: 1, cursor: 'pointer' }} onClick={() => navigate(isTrainingSystem ? '/training' : '/dashboard')}>
+          <Typography variant="h6" component="div" sx={{ 
+            flexGrow: 1, 
+            cursor: 'pointer',
+            fontSize: { xs: '1.1rem', sm: '1.2rem', md: '1.25rem' }
+          }} onClick={() => navigate(isTrainingSystem ? '/training' : '/dashboard')}>
             {isTrainingSystem ? 'Training System' : 'PM Management'}
           </Typography>
           
@@ -670,70 +739,137 @@ const Header = () => {
                   const isActive = item.path === location.pathname || 
                     item.subItems.some(subItem => subItem.path === location.pathname);
                   
-                  return (
-                    <React.Fragment key={item.path}>
-                      <Button
-                        color="inherit"
-                        onClick={handleShipmentClick}
-                        onMouseEnter={handleShipmentHover}
-                        onMouseLeave={handleShipmentLeave}
-                        sx={{ 
-                          mx: 1, 
-                          fontWeight: isActive ? 'bold' : 'regular',
-                          borderBottom: isActive ? '2px solid white' : 'none',
-                          '&:hover': {
-                            backgroundColor: 'rgba(255, 255, 255, 0.15)',
-                            borderRadius: 0
-                          }
-                        }}
-                      >
-                        {item.title}
-                      </Button>
-                      
-                      <Popper
-                        open={shipmentMenuOpen}
-                        anchorEl={shipmentMenuAnchor}
-                        placement="bottom-start"
-                        transition
-                        disablePortal
-                        sx={{ zIndex: theme.zIndex.drawer + 2 }}
-                      >
-                        {({ TransitionProps, placement }) => (
-                          <Grow
-                            {...TransitionProps}
-                            style={{ transformOrigin: 'top left' }}
-                          >
-                            <Paper 
-                              elevation={3}
-                              sx={{ mt: 1, minWidth: 180 }}
-                              onMouseEnter={() => setShipmentMenuOpen(true)}
-                              onMouseLeave={handleShipmentLeave}
+                  if (item.title === 'Shipment') {
+                    return (
+                      <React.Fragment key={item.path}>
+                        <Button
+                          color="inherit"
+                          onClick={handleShipmentClick}
+                          onMouseEnter={handleShipmentHover}
+                          onMouseLeave={handleShipmentLeave}
+                          sx={{ 
+                            mx: 1, 
+                            fontWeight: isActive ? 'bold' : 'regular',
+                            borderBottom: isActive ? '2px solid white' : 'none',
+                            '&:hover': {
+                              backgroundColor: 'rgba(255, 255, 255, 0.15)',
+                              borderRadius: 0
+                            }
+                          }}
+                        >
+                          {item.title}
+                        </Button>
+                        
+                        <Popper
+                          open={shipmentMenuOpen}
+                          anchorEl={shipmentMenuAnchor}
+                          placement="bottom-start"
+                          transition
+                          disablePortal
+                          sx={{ zIndex: theme.zIndex.drawer + 2 }}
+                        >
+                          {({ TransitionProps, placement }) => (
+                            <Grow
+                              {...TransitionProps}
+                              style={{ transformOrigin: 'top left' }}
                             >
-                              <MenuList autoFocusItem={false}>
-                                {item.subItems.map((subItem) => (
-                                  <MenuItem
-                                    key={subItem.path}
-                                    onClick={() => handleShipmentMenuItemClick(subItem.path)}
-                                    sx={{ 
-                                      minHeight: 42,
-                                      '&:hover': { bgcolor: 'action.hover' }
-                                    }}
-                                  >
-                                    <ListItemIcon sx={{ minWidth: 36 }}>
-                                      {subItem.icon}
-                                    </ListItemIcon>
-                                    <ListItemText>
-                                      {subItem.title}
-                                    </ListItemText>
-                                  </MenuItem>
-                                ))}
-                              </MenuList>
-                            </Paper>
-                          </Grow>
-                        )}
-                      </Popper>
-                    </React.Fragment>
-                  );
+                              <Paper 
+                                elevation={3}
+                                sx={{ mt: 1, minWidth: 180 }}
+                                onMouseEnter={() => setShipmentMenuOpen(true)}
+                                onMouseLeave={handleShipmentLeave}
+                              >
+                                <MenuList autoFocusItem={false}>
+                                  {item.subItems.map((subItem) => (
+                                    <MenuItem
+                                      key={subItem.path}
+                                      onClick={() => handleShipmentMenuItemClick(subItem.path)}
+                                      sx={{ 
+                                        minHeight: 42,
+                                        '&:hover': { bgcolor: 'action.hover' }
+                                      }}
+                                    >
+                                      <ListItemIcon sx={{ minWidth: 36 }}>
+                                        {subItem.icon}
+                                      </ListItemIcon>
+                                      <ListItemText>
+                                        {subItem.title}
+                                      </ListItemText>
+                                    </MenuItem>
+                                  ))}
+                                </MenuList>
+                              </Paper>
+                            </Grow>
+                          )}
+                        </Popper>
+                      </React.Fragment>
+                    );
+                  } else if (item.title === 'Trainings') {
+                    return (
+                      <React.Fragment key={item.path}>
+                        <Button
+                          color="inherit"
+                          onClick={handleTrainingsClick}
+                          onMouseEnter={handleTrainingsHover}
+                          onMouseLeave={handleTrainingsLeave}
+                          sx={{ 
+                            mx: 1, 
+                            fontWeight: isActive ? 'bold' : 'regular',
+                            borderBottom: isActive ? '2px solid white' : 'none',
+                            '&:hover': {
+                              backgroundColor: 'rgba(255, 255, 255, 0.15)',
+                              borderRadius: 0
+                            }
+                          }}
+                        >
+                          {item.title}
+                        </Button>
+                        
+                        <Popper
+                          open={trainingsMenuOpen}
+                          anchorEl={trainingsMenuAnchor}
+                          placement="bottom-start"
+                          transition
+                          disablePortal
+                          sx={{ zIndex: theme.zIndex.drawer + 2 }}
+                        >
+                          {({ TransitionProps, placement }) => (
+                            <Grow
+                              {...TransitionProps}
+                              style={{ transformOrigin: 'top left' }}
+                            >
+                              <Paper 
+                                elevation={3}
+                                sx={{ mt: 1, minWidth: 180 }}
+                                onMouseEnter={() => setTrainingsMenuOpen(true)}
+                                onMouseLeave={handleTrainingsLeave}
+                              >
+                                <MenuList autoFocusItem={false}>
+                                  {item.subItems.map((subItem) => (
+                                    <MenuItem
+                                      key={subItem.path}
+                                      onClick={() => handleTrainingsMenuItemClick(subItem.path)}
+                                      sx={{ 
+                                        minHeight: 42,
+                                        '&:hover': { bgcolor: 'action.hover' }
+                                      }}
+                                    >
+                                      <ListItemIcon sx={{ minWidth: 36 }}>
+                                        {subItem.icon}
+                                      </ListItemIcon>
+                                      <ListItemText>
+                                        {subItem.title}
+                                      </ListItemText>
+                                    </MenuItem>
+                                  ))}
+                                </MenuList>
+                              </Paper>
+                            </Grow>
+                          )}
+                        </Popper>
+                      </React.Fragment>
+                    );
+                  }
                 }
                 
                 const isActive = location.pathname === item.path;
